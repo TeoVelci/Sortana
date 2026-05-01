@@ -251,7 +251,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               className={`flex items-center gap-3 px-4 py-3 rounded-lg border border-transparent transition-all group ${isActive('/browse') ? 'text-gray-900 dark:text-white border-gray-200 dark:border-white/10 shadow-sm bg-gray-100 dark:bg-white/5' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'}`} to="/browse"
             >
               <i className={`fa-solid fa-folder-tree w-5 text-center ${isActive('/browse') ? 'text-primary' : 'group-hover:text-gray-700 dark:group-hover:text-gray-200'}`}></i>
-              <span className="font-medium">Files</span>
+              <span className="font-medium">Organized Files</span>
             </Link>
             <Link className={`flex items-center gap-3 px-4 py-3 rounded-lg border border-transparent transition-all group ${isActive('/account') ? 'text-gray-900 dark:text-white border-gray-200 dark:border-white/10 shadow-sm bg-gray-100 dark:bg-white/5' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'}`} to="/account">
               <i className={`fa-solid fa-gear w-5 text-center ${isActive('/account') ? 'text-primary' : 'group-hover:text-gray-700 dark:group-hover:text-gray-200'}`}></i>

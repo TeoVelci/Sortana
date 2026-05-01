@@ -301,7 +301,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
               // Reset stuck uploads
               if (newItem.syncStatus === 'uploading') {
+                  // Check if it's a recent upload that might still be in progress
+                  // For now, we move it to error so the user can retry, since memory File is lost
                   newItem.syncStatus = 'error';
+                  newItem.description = 'Upload interrupted.';
                   itemChanged = true;
               }
 
@@ -314,7 +317,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   if (newItem.s3Key && (!newItem.previewUrl || isBlob)) {
                       // For non-raw images, we can use the original as preview if no specific preview exists
                       if (newItem.fileType !== 'raw') {
-                          newItem.previewUrl = `/api/file-view?key=${encodeURIComponent(newItem.s3Key)}`;
+                          newItem.previewUrl = getPublicUrl(newItem.s3Key);
                           itemChanged = true;
                       } else {
                           // For RAW files, if the preview is a dead blob, we should try to re-generate it 
@@ -328,7 +331,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                           newItem.thumbnailUrl = newItem.previewUrl;
                           itemChanged = true;
                       } else if (newItem.fileType !== 'raw') {
-                          newItem.thumbnailUrl = `/api/file-view?key=${encodeURIComponent(newItem.s3Key)}`;
+                          newItem.thumbnailUrl = getPublicUrl(newItem.s3Key);
                           itemChanged = true;
                       }
                   }
@@ -768,10 +771,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const timeoutId = setTimeout(() => controller.abort(), 330000); // 5.5 minute timeout
 
           // For Netlify/serverless deployment, we skip backend proxy generation
-      // as it requires a dedicated server with FFmpeg.
-      // Instead, we just use the original video file.
-      setItems(prev => prev.map(i => i.id === id ? { ...i, description: 'Using original source.', syncStatus: 'synced' } : i));
-      return;
+          // as it requires a dedicated server with FFmpeg.
+          // Instead, we just use the original video file.
+          setItems(prev => prev.map(i => i.id === id ? { 
+              ...i, 
+              proxyS3Key: key, 
+              description: 'Using original source.', 
+              syncStatus: 'synced' 
+          } : i));
+          
+          upsertItem({ 
+              ...item, 
+              proxyS3Key: key, 
+              description: 'Using original source.', 
+              syncStatus: 'synced' 
+          });
+          return;
 
       /* RESTORE THIS IF YOU DEPLOY TO A SERVER WITH FFMPEG
           const response = await fetch('/api/generate-proxy', {
@@ -1040,13 +1055,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       const previewName = `preview-${f.name}.jpg`;
                       const { url: pUrl, key: pKey } = await getPresignedUrl(previewName, 'image/jpeg');
                       await uploadFileToS3(previewBlob, pUrl);
-                      finalPreviewUrl = `/api/file-view?key=${encodeURIComponent(pKey)}`;
+                      finalPreviewUrl = getPublicUrl(pKey);
                       
                       if (thumbnailBlob) {
                           const thumbName = `thumb-${f.name}.jpg`;
                           const { url: tUrl, key: tKey } = await getPresignedUrl(thumbName, 'image/jpeg');
                           await uploadFileToS3(thumbnailBlob, tUrl);
-                          finalThumbnailUrl = `/api/file-view?key=${encodeURIComponent(tKey)}`;
+                          finalThumbnailUrl = getPublicUrl(tKey);
                       }
                   } catch (pErr) {
                       console.warn(`Preview/Thumbnail upload failed for ${f.name}, falling back to local blobs`, pErr);
@@ -1073,7 +1088,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (fType === 'video') {
                   // On serverless, we don't call generateVideoProxy, 
                   // just mark as finished using the original file as proxy.
-                  setItems(prev => prev.map(i => i.id === id ? { ...i, description: 'Using original source.' } : i));
+                  setItems(prev => prev.map(i => i.id === id ? { 
+                      ...i, 
+                      proxyS3Key: key, 
+                      description: 'Using original source.',
+                      syncStatus: 'synced' 
+                  } : i));
+                  
+                  upsertItem({ 
+                      ...newItem, 
+                      s3Key: key, 
+                      proxyS3Key: key, 
+                      syncStatus: 'synced', 
+                      description: 'Using original source.',
+                      previewUrl: finalPreviewUrl,
+                      thumbnailUrl: finalThumbnailUrl
+                  });
               }
           } catch (error) {
               console.error(`Upload failed for ${f.name}`, error);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FileSystemItem, useApp } from './AppContext';
 import { editImageWithAI } from './aiService';
 import { useToast } from './ToastContext';
+import { getPublicUrl } from './storageService';
 
 interface MagicEditorProps {
   item: FileSystemItem;
@@ -119,7 +120,7 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
                 {isVideo ? (
                     <div className="relative">
                         <video 
-                            src={item.proxyS3Key ? `/api/file-view?key=${encodeURIComponent(item.proxyS3Key)}` : item.previewUrl}
+                            src={getPublicUrl(item.proxyS3Key || item.s3Key!)}
                             controls
                             className="max-w-full max-h-[calc(100vh-280px)] object-contain"
                         />

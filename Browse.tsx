@@ -1,7 +1,8 @@
-
 import React, { useState, useEffect, useCallback, useRef, MouseEvent as ReactMouseEvent, CSSProperties } from 'react';
 import { useApp, FileSystemItem } from './AppContext';
 import { useToast } from './ToastContext';
+import { getPublicUrl } from './storageService';
+import { supabase } from './supabaseClient';
 import MagicEditor from './MagicEditor';
 import ExportModal from './ExportModal';
 import CleanupModal from './CleanupModal';
@@ -222,7 +223,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                 <div className="relative w-full h-full flex items-center justify-center bg-black">
                     {(item.proxyS3Key || item.s3Key) ? (
                         <video 
-                            src={`/api/file-view?key=${encodeURIComponent(item.proxyS3Key || item.s3Key!)}`}
+                            src={getPublicUrl(item.proxyS3Key || item.s3Key!)}
                             poster={item.thumbnailUrl || item.previewUrl || undefined}
                             className="w-full h-full object-contain"
                             muted
@@ -1454,7 +1455,7 @@ const Browse: React.FC = () => {
                 
                 {activeCullingItem.fileType === 'video' ? (
                     <video 
-                        src={activeCullingItem.proxyS3Key ? `/api/file-view?key=${encodeURIComponent(activeCullingItem.proxyS3Key)}` : activeCullingItem.previewUrl} 
+                        src={getPublicUrl(activeCullingItem.proxyS3Key || activeCullingItem.s3Key!)}
                         controls
                         autoPlay
                         loop
@@ -1464,7 +1465,7 @@ const Browse: React.FC = () => {
                     />
                 ) : (
                     <img 
-                        src={activeCullingItem.previewUrl} 
+                        src={activeCullingItem.previewUrl || activeCullingItem.thumbnailUrl || getPublicUrl(activeCullingItem.s3Key!)}
                         alt={activeCullingItem.name} 
                         className="max-w-full max-h-full object-contain shadow-2xl z-10"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
