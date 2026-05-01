@@ -17,6 +17,14 @@ export class QuotaExceededError extends Error {
     }
 }
 
+const isValidImageBlob = async (blob: Blob): Promise<boolean> => {
+    try {
+        const bitmap = await createImageBitmap(blob);
+        bitmap.close();
+        return true;
+    } catch (e) { return false; }
+};
+
 // --- WORKER MANAGEMENT ---
 
 // INLINED WORKER CODE (Pure JS) to avoid file path/bundling issues
@@ -1265,7 +1273,7 @@ export const generateTagsForBatch = async (batch: BatchItem[]): Promise<AIAnalys
                     success: true
                 };
             } catch (e) {
-                console.warn(`Image preparation failed for ${item.id}:`, e);
+                console.warn(`Upload attempt failed for ${(item.file as File).name || 'blob'}:`, e);
                 return { id: item.id, success: false };
             }
         }));

@@ -12,7 +12,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.996.0",
     "@aws-sdk/s3-request-presigner": "^3.996.0",
-    "@google/genai": "^1.37.0",
+    "@google/genai": "latest",
     "@supabase/supabase-js": "^2.97.0",
     "@types/fluent-ffmpeg": "^2.1.28",
     "cors": "^2.8.6",

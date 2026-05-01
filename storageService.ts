@@ -59,7 +59,7 @@ export const uploadFileToS3 = async (file: File | Blob, url: string, retries = 3
       lastError = new Error(`S3 Upload failed with status ${response.status}: ${errorText}`);
     } catch (error: any) {
       lastError = error;
-      console.warn(`Upload attempt ${i + 1} failed for ${file.name}:`, error);
+      console.warn(`Upload attempt ${i + 1} failed for ${(file as File).name || 'blob'}:`, error);
     }
 
     // Exponential backoff: 1s, 2s, 4s...

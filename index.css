@@ -1,0 +1,88 @@
+
+/* Global Styles for Sortana */
+
+:root {
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --bg-dark: #09090b;
+  --surface-dark: #18181b;
+  --text-main: #fafafa;
+  --text-muted: #a1a1aa;
+}
+
+/* Obsidian Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #09090b;
+}
+::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+}
+
+/* Material Symbols Fill Support */
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+.fill-1 {
+    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Landing Page Specific Styles - Obsidian Gradients */
+.text-gradient {
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    background-image: linear-gradient(to right, #818cf8, #c084fc); /* Indigo to Purple */
+}
+.btn-glow {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+    transition: all 0.3s ease;
+}
+.btn-glow:hover {
+    box-shadow: 0 0 35px rgba(99, 102, 241, 0.6);
+    transform: translateY(-2px);
+}
+
+/* Workflow Gradients - Darker, Glassier */
+.gradient-workflow-1 {
+    background: linear-gradient(to bottom right, #18181b, #1e1b4b); /* Zinc to Dark Indigo */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.gradient-workflow-2 {
+    background: linear-gradient(to bottom right, #09090b, #312e81); /* Black to Indigo 900 */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.gradient-workflow-3 {
+    background: linear-gradient(to bottom right, #18181b, #2e1065); /* Zinc to Dark Violet */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.workflow-image-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(9, 9, 11, 0.95) 0%, rgba(9, 9, 11, 0.3) 50%, rgba(9, 9, 11, 0.8) 100%);
+    z-index: 1;
+}
+.scroll-container {
+    mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+.scrolling-wrapper:hover {
+    animation-play-state: paused; 
+}
+
+/* Upload Zone - Dashed Border */
+.upload-zone {
+    background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%236366f1' stroke-width='2' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
+    transition: all 0.3s ease
+}
+.progress-gradient {
+    background: linear-gradient(90deg, #6366f1 0%, #a855f7 100%)
+}
