@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Sortana AI</title>
+    
+    <!-- Tailwind CSS v3 with plugins -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries,typography,aspect-ratio"></script>
+    
+    <!-- FontAwesome for Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <!-- Material Symbols for Sortana Design -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"/>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+    
+    <!-- EXIF JS for Metadata Extraction -->
+    <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+
+    <!-- Custom Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ["Inter", "sans-serif"],
+                        body: ["Inter", "sans-serif"],
+                    },
+                    colors: {
+                        // OBSIDIAN PALETTE MAPPING
+                        
+                        // Dark Mode Backgrounds (Zinc/Black)
+                        dark: {
+                            900: '#09090b', // Zinc 950 (Main Background)
+                            800: '#18181b', // Zinc 900 (Surface/Card)
+                            700: '#27272a', // Zinc 800 (Hover/Border)
+                            600: '#3f3f46', // Zinc 700 (Muted Text)
+                        },
+                        // Brand Accent (Vivid Indigo)
+                        brand: {
+                            purple: '#6366f1', // Indigo 500
+                            glow: '#818cf8',   // Indigo 400
+                        },
+                        // Semantic Colors (Mapped to Obsidian Theme)
+                        primary: "#6366f1", // Indigo 500
+                        "primary-hover": "#4f46e5", // Indigo 600
+                        
+                        "background-light": "#ffffff",
+                        "background-dark": "#09090b", // Deep Void Black
+                        
+                        "surface-light": "#f4f4f5", // Zinc 100
+                        "surface-dark": "#18181b",  // Zinc 900
+                        
+                        "text-main-light": "#09090b",
+                        "text-main-dark": "#fafafa", // Off-white
+                        
+                        "text-muted-light": "#52525b",
+                        "text-muted-dark": "#a1a1aa", // Zinc 400
+                    },
+                    boxShadow: {
+                        // Refined Glass Shadows (Subtle White/Indigo)
+                        'neon': '0 0 15px rgba(99, 102, 241, 0.3), 0 0 30px rgba(99, 102, 241, 0.1)',
+                        'neon-strong': '0 0 40px rgba(99, 102, 241, 0.25), inset 0 0 20px rgba(99, 102, 241, 0.1)',
+                        'card': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.36)',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        scroll: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(-50%)' },
+                        }
+                    },
+                    animation: {
+                        fadeIn: 'fadeIn 1s ease-out forwards',
+                        scroll: 'scroll 45s linear infinite',
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Obsidian Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #09090b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f3f46;
+        }
+
+        /* Material Symbols Fill Support */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .fill-1 {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        /* Landing Page Specific Styles - Obsidian Gradients */
+        .text-gradient {
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            background-image: linear-gradient(to right, #818cf8, #c084fc); /* Indigo to Purple */
+        }
+        .btn-glow {
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+            transition: all 0.3s ease;
+        }
+        .btn-glow:hover {
+            box-shadow: 0 0 35px rgba(99, 102, 241, 0.6);
+            transform: translateY(-2px);
+        }
+        
+        /* Workflow Gradients - Darker, Glassier */
+        .gradient-workflow-1 {
+            background: linear-gradient(to bottom right, #18181b, #1e1b4b); /* Zinc to Dark Indigo */
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .gradient-workflow-2 {
+            background: linear-gradient(to bottom right, #09090b, #312e81); /* Black to Indigo 900 */
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .gradient-workflow-3 {
+            background: linear-gradient(to bottom right, #18181b, #2e1065); /* Zinc to Dark Violet */
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        .workflow-image-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(9, 9, 11, 0.95) 0%, rgba(9, 9, 11, 0.3) 50%, rgba(9, 9, 11, 0.8) 100%);
+            z-index: 1;
+        }
+        .scroll-container {
+            mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+            -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+        }
+        .scrolling-wrapper:hover {
+            animation-play-state: paused; 
+        }
+
+        /* Upload Zone - Dashed Border */
+        .upload-zone {
+            background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%236366f1' stroke-width='2' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
+            transition: all 0.3s ease
+        }
+        .progress-gradient {
+            background: linear-gradient(90deg, #6366f1 0%, #a855f7 100%)
+        }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^18.2.0/",
+    "react/": "https://esm.sh/react@^18.2.0/",
+    "react": "https://esm.sh/react@^18.2.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.14.2?external=react,react-dom",
+    "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
+    "jszip": "https://esm.sh/jszip@3.10.1",
+    "react-window": "https://esm.sh/react-window@1.8.10?external=react,react-dom",
+    "react-virtualized-auto-sizer": "https://esm.sh/react-virtualized-auto-sizer@1.0.24?external=react,react-dom"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-background-light dark:bg-background-dark text-text-main-light dark:text-text-main-dark transition-colors duration-200">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
