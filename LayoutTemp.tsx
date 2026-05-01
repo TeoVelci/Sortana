@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from './AppContext';
@@ -15,20 +14,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
-
+  
   const location = useLocation();
   const navigate = useNavigate();
 
   // Network Status Listener
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
+      const handleOnline = () => setIsOnline(true);
+      const handleOffline = () => setIsOnline(false);
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+      return () => {
+          window.removeEventListener('online', handleOnline);
+          window.removeEventListener('offline', handleOffline);
+      };
   }, []);
 
   // Initialize Dark Mode - Default to Dark for Obsidian Theme
@@ -47,20 +46,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Global Keyboard Shortcuts for Undo/Redo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault();
-        if (e.shiftKey) {
-          if (canRedo) {
-            redo();
-            showToast('Redo', 'info');
-          }
-        } else {
-          if (canUndo) {
-            undo();
-            showToast(`Undoing: ${historyDescription || 'Action'}`, 'info');
-          }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                if (canRedo) {
+                    redo();
+                    showToast('Redo', 'info');
+                }
+            } else {
+                if (canUndo) {
+                    undo();
+                    showToast(`Undoing: ${historyDescription || 'Action'}`, 'info');
+                }
+            }
         }
-      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -79,12 +78,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const handleLogout = () => {
-    logout();
-    navigate('/');
+      logout();
+      navigate('/');
   };
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
-
+  
   const isActive = (path: string) => location.pathname === path;
 
   const storagePercent = getStoragePercentage();
@@ -106,9 +105,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-500 dark:text-gray-400">
           <Link className={`hover:text-gray-900 dark:hover:text-white transition-colors ${isActive('/pricing') ? 'text-primary dark:text-primary' : ''}`} to="/pricing">Pricing</Link>
           <Link className={`text-gray-900 dark:text-white relative ${isActive('/dashboard') ? "after:content-[''] after:absolute after:-bottom-5 after:left-0 after:w-full after:h-0.5 after:bg-primary after:shadow-[0_0_10px_rgba(99,102,241,0.5)]" : ""}`} to="/dashboard">Dashboard</Link>
-          <Link
+          <Link 
             onClick={() => setCurrentFolderId(null)}
-            className={`hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer ${isActive('/browse') ? 'text-primary dark:text-primary' : ''}`}
+            className={`hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer ${isActive('/browse') ? 'text-primary dark:text-primary' : ''}`} 
             to="/browse"
           >
             Organized Files
@@ -118,47 +117,48 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         {/* Right Actions */}
         <div className="flex items-center gap-4">
-
+          
           {/* NETWORK / SYNC STATUS BADGE */}
-          <div className={`hidden sm:flex items-center gap-2 px-2 py-1 rounded-full text-xs font-bold border transition-colors ${syncStatus === 'offline' ? 'bg-gray-200 text-gray-500 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' :
+          <div className={`hidden sm:flex items-center gap-2 px-2 py-1 rounded-full text-xs font-bold border transition-colors ${
+              syncStatus === 'offline' ? 'bg-gray-200 text-gray-500 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' :
               syncStatus === 'syncing' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/30' :
-                'text-green-500 border-transparent'
-            }`}>
-            {syncStatus === 'offline' && (
-              <>
-                <i className="fa-solid fa-wifi-slash"></i>
-                <span>Offline</span>
-              </>
-            )}
-            {syncStatus === 'syncing' && (
-              <>
-                <i className="fa-solid fa-arrows-rotate fa-spin"></i>
-                <span>Syncing ({pendingSync})</span>
-              </>
-            )}
-            {syncStatus === 'synced' && (
-              <i className="fa-solid fa-cloud-check text-sm" title="All changes synced"></i>
-            )}
+              'text-green-500 border-transparent'
+          }`}>
+              {syncStatus === 'offline' && (
+                  <>
+                    <i className="fa-solid fa-wifi-slash"></i>
+                    <span>Offline</span>
+                  </>
+              )}
+              {syncStatus === 'syncing' && (
+                  <>
+                    <i className="fa-solid fa-arrows-rotate fa-spin"></i>
+                    <span>Syncing ({pendingSync})</span>
+                  </>
+              )}
+              {syncStatus === 'synced' && (
+                   <i className="fa-solid fa-cloud-check text-sm" title="All changes synced"></i>
+              )}
           </div>
 
           {/* UNDO / REDO BUTTONS */}
           <div className="hidden sm:flex items-center gap-1 bg-gray-100 dark:bg-dark-800 rounded-lg p-1 border border-gray-200 dark:border-white/5">
-            <button
-              onClick={undo}
-              disabled={!canUndo}
-              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${!canUndo ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed' : 'text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-dark-600 hover:shadow-sm'}`}
-              title={`Undo ${historyDescription ? `: ${historyDescription}` : ''} (Ctrl+Z)`}
-            >
-              <i className="fa-solid fa-rotate-left text-xs"></i>
-            </button>
-            <button
-              onClick={redo}
-              disabled={!canRedo}
-              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${!canRedo ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed' : 'text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-dark-600 hover:shadow-sm'}`}
-              title="Redo (Ctrl+Shift+Z)"
-            >
-              <i className="fa-solid fa-rotate-right text-xs"></i>
-            </button>
+             <button 
+                onClick={undo} 
+                disabled={!canUndo}
+                className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${!canUndo ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed' : 'text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-dark-600 hover:shadow-sm'}`}
+                title={`Undo ${historyDescription ? `: ${historyDescription}` : ''} (Ctrl+Z)`}
+             >
+                 <i className="fa-solid fa-rotate-left text-xs"></i>
+             </button>
+             <button 
+                onClick={redo} 
+                disabled={!canRedo}
+                className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${!canRedo ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed' : 'text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-dark-600 hover:shadow-sm'}`}
+                title="Redo (Ctrl+Shift+Z)"
+             >
+                 <i className="fa-solid fa-rotate-right text-xs"></i>
+             </button>
           </div>
 
           <div className="hidden lg:flex flex-col items-end min-w-[140px]">
@@ -172,23 +172,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
 
           <div className="hidden md:flex items-center gap-2 group relative">
-            <Link to="/account" className="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
-              <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-dark-700 flex items-center justify-center overflow-hidden border border-transparent hover:border-primary transition-colors">
-                {user.avatarUrl ? (
-                  <img src={user.avatarUrl} alt="User" className="w-full h-full object-cover" />
-                ) : (
-                  <i className="fa-solid fa-user"></i>
-                )}
-              </div>
-              <span className="hidden sm:inline text-sm font-medium">{user.username}</span>
-            </Link>
-
-            {/* Simple Dropdown for Logout */}
-            <div className="absolute right-0 top-full mt-2 w-32 bg-white dark:bg-surface-dark border border-gray-200 dark:border-white/10 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all transform origin-top-right z-50">
-              <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-white/5 first:rounded-t-lg last:rounded-b-lg">
-                Log Out
-              </button>
-            </div>
+             <Link to="/account" className="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+                <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-dark-700 flex items-center justify-center overflow-hidden border border-transparent hover:border-primary transition-colors">
+                   {user.avatarUrl ? (
+                       <img src={user.avatarUrl} alt="User" className="w-full h-full object-cover" />
+                   ) : (
+                       <i className="fa-solid fa-user"></i>
+                   )}
+                </div>
+                <span className="hidden sm:inline text-sm font-medium">{user.username}</span>
+             </Link>
+             
+             {/* Simple Dropdown for Logout */}
+             <div className="absolute right-0 top-full mt-2 w-32 bg-white dark:bg-surface-dark border border-gray-200 dark:border-white/10 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all transform origin-top-right z-50">
+                <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-white/5 first:rounded-t-lg last:rounded-b-lg">
+                    Log Out
+                </button>
+             </div>
           </div>
 
           <button onClick={toggleTheme} className="flex items-center justify-center bg-gray-100 dark:bg-dark-700 rounded-full w-8 h-8 border border-gray-300 dark:border-white/10 text-yellow-500 hover:bg-white dark:hover:bg-dark-600 transition-colors">
@@ -245,7 +245,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <i className={`fa-solid fa-border-all w-5 text-center ${isActive('/dashboard') ? 'text-primary' : 'group-hover:text-gray-700 dark:group-hover:text-gray-200'}`}></i>
               <span className="font-medium">Dashboard</span>
             </Link>
-            <Link
+            <Link 
               id="nav-browse"
               onClick={() => setCurrentFolderId(null)}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg border border-transparent transition-all group ${isActive('/browse') ? 'text-gray-900 dark:text-white border-gray-200 dark:border-white/10 shadow-sm bg-gray-100 dark:bg-white/5' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'}`} to="/browse"
@@ -263,7 +263,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Main View Area */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 relative h-auto">
           {children}
-
+          
           <footer className="mt-8 flex flex-col md:flex-row justify-between items-center text-xs text-gray-500 pb-2">
             <p>© 2025 Sortana AI. All Rights Reserved.</p>
             <div className="flex gap-4 mt-2 md:mt-0">

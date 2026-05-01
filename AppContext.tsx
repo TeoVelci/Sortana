@@ -767,6 +767,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 330000); // 5.5 minute timeout
 
+          // For Netlify/serverless deployment, we skip backend proxy generation
+      // as it requires a dedicated server with FFmpeg.
+      // Instead, we just use the original video file.
+      setItems(prev => prev.map(i => i.id === id ? { ...i, description: 'Using original source.', syncStatus: 'synced' } : i));
+      return;
+
+      /* RESTORE THIS IF YOU DEPLOY TO A SERVER WITH FFMPEG
           const response = await fetch('/api/generate-proxy', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -791,6 +798,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   return i;
               }));
           }
+          */
       } catch (e: any) {
           console.error("Proxy generation failed", e);
           const errorMsg = e.name === 'AbortError' ? 'Proxy timed out.' : 'Proxy failed.';
@@ -1063,12 +1071,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
               // TRIGGER PROXY GENERATION AFTER UPLOAD SUCCESS
               if (fType === 'video') {
-                  generateVideoProxy(id, key);
+                  // On serverless, we don't call generateVideoProxy, 
+                  // just mark as finished using the original file as proxy.
+                  setItems(prev => prev.map(i => i.id === id ? { ...i, description: 'Using original source.' } : i));
               }
           } catch (error) {
               console.error(`Upload failed for ${f.name}`, error);
-              setItems(prev => prev.map(i => i.id === id ? { ...i, syncStatus: 'error' } : i));
-              upsertItem({ ...newItem, syncStatus: 'error' });
+              setItems(prev => prev.map(i => i.id === id ? { ...i, syncStatus: 'error', description: 'Upload failed.' } : i));
+              upsertItem({ ...newItem, syncStatus: 'error', description: 'Upload failed.' });
           }
       });
     }

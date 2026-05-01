@@ -1,6 +1,6 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import Layout from './Layout';
+import Layout from './LayoutTemp';
 import Dashboard from './Dashboard';
 import Browse from './Browse';
 import Account from './Account';

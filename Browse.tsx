@@ -236,6 +236,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                             <i className="fa-solid fa-film text-4xl text-gray-600 animate-pulse"></i>
                             <span className="text-[8px] text-gray-500 font-bold uppercase">
                                 {item.syncStatus === 'uploading' ? 'Uploading...' : 
+                                 item.description === 'Upload failed.' ? 'Upload Failed' :
                                  (item.description === 'Proxy failed.' || item.description === 'Proxy timed out.') ? 'Proxy Failed' : 
                                  'Processing Proxy'}
                             </span>
