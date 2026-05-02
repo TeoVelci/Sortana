@@ -118,18 +118,12 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
             >
                 {/* Original Content (Always underneath) */}
                 {isVideo ? (
-                    <div className="relative">
+                    <div className="relative flex justify-center items-center h-full w-full bg-black">
                         <video 
                             src={getPublicUrl(item.proxyS3Key || item.s3Key!)}
                             controls
                             className="max-w-full max-h-[calc(100vh-280px)] object-contain"
                         />
-                        {!item.proxyS3Key && (
-                            <div className="absolute top-4 right-4 bg-yellow-500/80 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold text-black border border-yellow-400/50 z-20">
-                                <i className="fa-solid fa-bolt mr-1"></i>
-                                PLAYING ORIGINAL (PROXY GENERATING...)
-                            </div>
-                        )}
                     </div>
                 ) : (
                     <img 

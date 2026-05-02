@@ -223,14 +223,15 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                 <div className="relative w-full h-full flex items-center justify-center bg-black">
                     {(item.proxyS3Key || item.s3Key) ? (
                         <video 
-                            src={getPublicUrl(item.proxyS3Key || item.s3Key!)}
+                            src={getPublicUrl(item.proxyS3Key || item.s3Key!) + '#t=0.001'}
                             poster={item.thumbnailUrl || item.previewUrl || undefined}
                             className="w-full h-full object-contain"
                             muted
                             loop
                             playsInline
+                            preload="metadata"
                             onMouseOver={(e) => { e.currentTarget.play().catch(() => {}); }}
-                            onMouseOut={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
+                            onMouseOut={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0.001; }}
                         />
                     ) : (
                         <div className="flex flex-col items-center gap-2">
@@ -239,7 +240,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                                 {item.syncStatus === 'uploading' ? 'Uploading...' : 
                                  item.description === 'Upload failed.' ? 'Upload Failed' :
                                  (item.description === 'Proxy failed.' || item.description === 'Proxy timed out.') ? 'Proxy Failed' : 
-                                 'Processing Proxy'}
+                                 'Media Unavailable'}
                             </span>
                         </div>
                     )}
@@ -465,7 +466,7 @@ const Browse: React.FC = () => {
 
   // Items eligible for Culling (Images only)
   // If we are in "Burst Mode" (cullingContextItems is set), use that.
-  const activeCullingList = cullingContextItems || currentItems.filter(i => i.type === 'file' && i.fileType === 'image');
+  const activeCullingList = cullingContextItems || currentItems.filter(i => i.type === 'file' && (i.fileType === 'image' || i.fileType === 'video' || i.fileType === 'raw'));
   
   // Current Item in Culling View
   const activeCullingItem = activeCullingList[cullingIndex];
@@ -520,7 +521,7 @@ const Browse: React.FC = () => {
   const handleItemDoubleClick = useCallback((e: ReactMouseEvent, item: FileSystemItem) => {
     if (item.type === 'folder') {
         navigateTo(item.id);
-    } else if (item.fileType === 'image') {
+    } else if (item.fileType === 'image' || item.fileType === 'video' || item.fileType === 'raw') {
         
         // CHECK FOR STACK
         if (item.groupId && item.isStackTop && isStackingEnabled) {
