@@ -786,25 +786,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  const generateVideoProxy = async (id: string, s3KeyOverride?: string) => {
-      const item = items.find(i => i.id === id);
-      const key = s3KeyOverride || item?.s3Key;
-      if (!item || !key || item.proxyS3Key) return;
-
-      setItems(prev => prev.map(i => i.id === id ? { ...i, description: 'Generating proxy...' } : i));
-
-      // We now rely on AWS MediaConvert + Webhook to update Supabase!
-      // The UI will show "Generating proxy..." until the webhook updates the DB.
-      // (A polling mechanism or realtime subscription should be used to refresh the UI).
-      
-      // Update DB to reflect generation state
-      upsertItem({ 
-          ...item, 
-          description: 'Generating proxy...', 
-          syncStatus: 'syncing' 
-      });
-  };
-
   const createFolder = (name: string) => {
     if (items.some(i => i.type === 'folder' && i.name.toLowerCase() === name.toLowerCase())) {
         return; 
@@ -1010,10 +991,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         imagesToQueue.push({ file: f, id, previewBlob, retryCount: 0 });
       }
 
-      if (fType === 'video') {
-          // generateVideoProxy(id); // REMOVED: Call it after upload instead
-      }
-
       // Define the upload task for this file
       uploadTasks.push(async () => {
           try {
@@ -1042,12 +1019,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   }
               }
 
+              const videoDescription = fType === 'video' ? 'Generating proxy...' : undefined;
+
               setItems(prev => prev.map(i => i.id === id ? { 
                   ...i, 
                   syncStatus: 'synced', 
                   s3Key: key, 
                   previewUrl: finalPreviewUrl,
-                  thumbnailUrl: finalThumbnailUrl
+                  thumbnailUrl: finalThumbnailUrl,
+                  description: videoDescription || i.description
               } : i));
               
               upsertItem({ 
@@ -1055,13 +1035,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   syncStatus: 'synced', 
                   s3Key: key, 
                   previewUrl: finalPreviewUrl,
-                  thumbnailUrl: finalThumbnailUrl
+                  thumbnailUrl: finalThumbnailUrl,
+                  description: videoDescription || newItem.description
               });
-
-              // TRIGGER PROXY GENERATION AFTER UPLOAD SUCCESS
-              if (fType === 'video') {
-                  generateVideoProxy(id, key);
-              }
           } catch (error: any) {
               console.error(`Upload failed for ${f.name}`, error);
               const errorMsg = error.message || 'Unknown error';
@@ -1449,7 +1425,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updateItemMetadata,
       executeOrganizationPlan,
       analyzeVideoItem,
-      generateVideoProxy,
       setViewState,
       resetFilters,
       bulkDeleteItems,
