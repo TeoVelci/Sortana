@@ -239,6 +239,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [session]);
 
+  // Poll for updates if any item is generating a proxy
+  useEffect(() => {
+    const isGenerating = items.some(item => item.description === 'Generating proxy...');
+    if (!isGenerating || !session) return;
+
+    const intervalId = setInterval(() => {
+      fetchItems().then(fetchedItems => {
+        setItems(fetchedItems);
+      });
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(intervalId);
+  }, [items, session]);
+
   // File Cache now stores actual File objects, populated on upload or rehydration from DB
   const [fileCache, setFileCache] = useState<Map<string, File>>(new Map());
 
@@ -779,69 +793,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       setItems(prev => prev.map(i => i.id === id ? { ...i, description: 'Generating proxy...' } : i));
 
-      try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 330000); // 5.5 minute timeout
-
-          // For Netlify/serverless deployment, we skip backend proxy generation
-          // as it requires a dedicated server with FFmpeg.
-          // Instead, we just use the original video file.
-          setItems(prev => prev.map(i => i.id === id ? { 
-              ...i, 
-              proxyS3Key: key, 
-              description: 'Using original source.', 
-              syncStatus: 'synced' 
-          } : i));
-          
-          upsertItem({ 
-              ...item, 
-              proxyS3Key: key, 
-              description: 'Using original source.', 
-              syncStatus: 'synced' 
-          });
-          return;
-
-      /* RESTORE THIS IF YOU DEPLOY TO A SERVER WITH FFMPEG
-          const response = await fetch('/api/generate-proxy', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key }),
-              signal: controller.signal
-          });
-          
-          clearTimeout(timeoutId);
-
-          if (!response.ok) {
-              throw new Error(`Proxy generation failed with status ${response.status}`);
-          }
-
-          const data = await response.json();
-          if (data.proxyKey) {
-              setItems(prev => prev.map(i => {
-                  if (i.id === id) {
-                      const updated = { ...i, proxyS3Key: data.proxyKey, description: i.description?.replace('Generating proxy...', '') || '' };
-                      upsertItem(updated);
-                      return updated;
-                  }
-                  return i;
-              }));
-          }
-          */
-      } catch (e: any) {
-          console.error("Proxy generation failed", e);
-          const errorMsg = e.name === 'AbortError' ? 'Proxy timed out.' : 'Proxy failed.';
-          setItems(prev => {
-              const latestItems = prev.map(i => {
-                  if (i.id === id) {
-                      const updated = { ...i, description: errorMsg, syncStatus: 'error' as any };
-                      upsertItem(updated); // Persist error so UI can show retry state
-                      return updated;
-                  }
-                  return i;
-              });
-              return latestItems;
-          });
-      }
+      // We now rely on AWS MediaConvert + Webhook to update Supabase!
+      // The UI will show "Generating proxy..." until the webhook updates the DB.
+      // (A polling mechanism or realtime subscription should be used to refresh the UI).
+      
+      // Update DB to reflect generation state
+      upsertItem({ 
+          ...item, 
+          description: 'Generating proxy...', 
+          syncStatus: 'syncing' 
+      });
   };
 
   const createFolder = (name: string) => {

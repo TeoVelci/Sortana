@@ -16,6 +16,16 @@ const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
     const directUrl = useAwsUrl(s3Key);
     const [hasError, setHasError] = useState(false);
 
+    if (item.description === 'Generating proxy...') {
+        return (
+            <div className="flex flex-col items-center justify-center h-full gap-2 p-2 text-center text-gray-400">
+                <i className="fa-solid fa-circle-notch fa-spin text-3xl text-primary"></i>
+                <span className="text-[10px] font-bold">PROCESSING VIDEO</span>
+                <span className="text-[8px] max-w-[120px] leading-tight">Creating a web-friendly proxy for seamless playback.</span>
+            </div>
+        );
+    }
+
     if (hasError) {
         return (
             <div className="flex flex-col items-center gap-2 p-2 text-center text-gray-500">
