@@ -968,7 +968,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               shouldAnalyze = true;
           } else if (f.type.startsWith('video/')) {
               fType = 'video';
-              shouldAnalyze = true; // For metadata analysis
+              shouldAnalyze = false; // Videos are handled by VideoMetadataQueue, not the image AI
           }
 
           const meta = await extractDetailedMetadata(f);
