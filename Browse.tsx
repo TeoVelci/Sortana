@@ -244,13 +244,11 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                     {(item.proxyS3Key || item.s3Key) ? (
                         <VideoThumbnail item={item} />
                     ) : (
-                        <div className="flex flex-col items-center gap-2">
+                        <div className="flex flex-col items-center gap-2 p-2 text-center overflow-hidden">
                             <i className="fa-solid fa-film text-4xl text-gray-600 animate-pulse"></i>
-                            <span className="text-[8px] text-gray-500 font-bold uppercase">
+                            <span className="text-[8px] text-gray-500 font-bold uppercase truncate max-w-full">
                                 {item.syncStatus === 'uploading' ? 'Uploading...' : 
-                                 item.description === 'Upload failed.' ? 'Upload Failed' :
-                                 (item.description === 'Proxy failed.' || item.description === 'Proxy timed out.') ? 'Proxy Failed' : 
-                                 'Media Unavailable'}
+                                 item.description ? item.description : 'Media Unavailable'}
                             </span>
                         </div>
                     )}
