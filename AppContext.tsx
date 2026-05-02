@@ -218,7 +218,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         // Fetch Items from Supabase
         fetchItems().then(fetchedItems => {
-            setItems(fetchedItems);
+            // If the app crashed or was reloaded while items were 'uploading',
+            // they are permanently stuck. Reset them to 'error' state.
+            let needsDbUpdate = false;
+            const cleanedItems = fetchedItems.map(item => {
+                if (item.syncStatus === 'uploading') {
+                    needsDbUpdate = true;
+                    const updatedItem = { ...item, syncStatus: 'error' as const, description: 'Upload interrupted.' };
+                    upsertItem(updatedItem); // Persist the reset status
+                    return updatedItem;
+                }
+                return item;
+            });
+            setItems(cleanedItems);
         });
     } else {
         // Clear items on logout

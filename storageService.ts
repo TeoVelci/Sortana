@@ -90,6 +90,7 @@ export const downloadFileFromS3 = async (key: string): Promise<Blob> => {
  * Helper to get a public URL for display.
  */
 export const getPublicUrl = (key: string): string => {
+  if (!key) return '';
   const { data } = supabase.storage
     .from(BUCKET_NAME)
     .getPublicUrl(key);
