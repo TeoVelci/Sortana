@@ -131,6 +131,7 @@ interface AppContextType {
   formatSize: (bytes: number) => string;
   getStoragePercentage: () => number;
   getFileObject: (id: string) => File | undefined; // Helper to retrieve File object if available in memory
+  retryUpload: (id: string) => Promise<void>;
   
   // Queue Status
   queueStatus: 'idle' | 'processing' | 'paused';
@@ -1117,10 +1118,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       thumbnailUrl: finalThumbnailUrl
                   });
               }
-          } catch (error) {
+          } catch (error: any) {
               console.error(`Upload failed for ${f.name}`, error);
-              setItems(prev => prev.map(i => i.id === id ? { ...i, syncStatus: 'error', description: 'Upload failed.' } : i));
-              upsertItem({ ...newItem, syncStatus: 'error', description: 'Upload failed.' });
+              const errorMsg = error.message || 'Unknown error';
+              showToast(`Failed to upload ${f.name}: ${errorMsg}`, 'error');
+              setItems(prev => prev.map(i => i.id === id ? { ...i, syncStatus: 'error', description: `Upload failed: ${errorMsg}` } : i));
+              upsertItem({ ...newItem, syncStatus: 'error', description: `Upload failed: ${errorMsg}` });
           }
       });
     }
@@ -1395,6 +1398,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
       });
   };
+  const retryUpload = async (id: string) => {
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+
+      const file = fileCache.get(id);
+      if (!file) {
+          showToast("Original file is no longer in memory. Please delete this item and select the file again.", "error");
+          return;
+      }
+
+      // Mark as uploading
+      setItems(prev => prev.map(i => i.id === id ? { ...i, syncStatus: 'uploading', description: 'Retrying upload...' } : i));
+
+      try {
+          // Re-attempt S3 upload
+          const { url, key } = await getPresignedUrl(file.name, file.type);
+          await uploadFileToS3(file, url);
+          
+          const finalUpdates: Partial<FileSystemItem> = {
+              s3Key: key,
+              syncStatus: 'synced',
+              description: item.fileType === 'video' ? 'Using original source.' : ''
+          };
+          
+          if (item.fileType === 'video') {
+              finalUpdates.proxyS3Key = key;
+          }
+
+          setItems(prev => prev.map(i => i.id === id ? { ...i, ...finalUpdates } : i));
+          upsertItem({ ...item, ...finalUpdates });
+          showToast("Upload retry successful!", "success");
+      } catch (error) {
+          console.error("Retry failed:", error);
+          setItems(prev => prev.map(i => i.id === id ? { ...i, syncStatus: 'error', description: 'Upload failed.' } : i));
+          upsertItem({ ...item, syncStatus: 'error', description: 'Upload failed.' });
+      }
+  };
 
   const executeOrganizationPlan = (plan: FolderPlan[], targetParentId: string | null = null) => {
       const newItems = [...items];
@@ -1479,6 +1519,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       formatSize,
       getStoragePercentage,
       getFileObject,
+      retryUpload,
       queueStatus,
       syncQueue
     }}>
