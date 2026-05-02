@@ -14,6 +14,18 @@ import AutoSizer from 'react-virtualized-auto-sizer';
 const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
     const s3Key = item.proxyS3Key || item.s3Key;
     const directUrl = useAwsUrl(s3Key);
+    const [hasError, setHasError] = useState(false);
+
+    if (hasError) {
+        return (
+            <div className="flex flex-col items-center gap-2 p-2 text-center text-gray-500">
+                <i className="fa-solid fa-video-slash text-4xl mb-2"></i>
+                <span className="text-[10px] font-bold">UNSUPPORTED FORMAT</span>
+                <span className="text-[8px] max-w-[120px] leading-tight">Your browser cannot play this raw video format (e.g. HEVC). Please download it or use Safari.</span>
+            </div>
+        );
+    }
+
     return (
         <video 
             src={directUrl ? `${directUrl}#t=0.001` : undefined}
@@ -25,6 +37,7 @@ const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
             preload="metadata"
             onMouseOver={(e) => { e.currentTarget.play().catch(() => {}); }}
             onMouseOut={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0.001; }}
+            onError={() => setHasError(true)}
         />
     );
 };
