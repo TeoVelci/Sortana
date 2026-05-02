@@ -190,7 +190,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
             {/* Content Preview */}
             <div className="w-full h-full flex items-center justify-center">
                 {item.type === 'folder' && (
-                <span className="material-icons-outlined text-6xl text-gray-400 group-hover:text-primary transition-colors">folder</span>
+                <i className="fa-solid fa-folder text-6xl text-gray-400 group-hover:text-primary transition-colors"></i>
                 )}
                 {item.type === 'file' && (item.fileType === 'image' || item.fileType === 'raw') && (
                 (item.thumbnailUrl || item.previewUrl) ? 

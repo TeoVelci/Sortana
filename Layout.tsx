@@ -99,7 +99,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <header className="bg-white/80 dark:bg-background-dark/80 backdrop-blur-xl border-b border-gray-200 dark:border-white/10 h-16 flex items-center justify-between px-6 shrink-0 z-50 transition-colors duration-200 sticky top-0 lg:relative">
         {/* Logo */}
         <Link to="/dashboard" className="flex items-center gap-3 h-full group">
-          <span className="text-3xl font-black tracking-tighter text-primary">S</span>
+          <div className="relative w-8 h-8 flex items-center justify-center shrink-0">
+            <div className="absolute inset-0 bg-primary/20 rounded-lg transform rotate-3 group-hover:rotate-6 transition-transform"></div>
+            <div className="absolute inset-0 bg-primary rounded-lg flex items-center justify-center transform -rotate-3 group-hover:-rotate-0 transition-transform">
+                <i className="fa-solid fa-border-all text-white text-sm"></i>
+            </div>
+          </div>
+          <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-white hidden sm:block">Sortana AI</span>
         </Link>
 
         {/* Desktop Nav */}
@@ -217,7 +223,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
           </div>
           <Link to="/dashboard" onClick={toggleMobileMenu} className="flex items-center gap-3 text-primary"><i className="fa-solid fa-border-all w-6 text-center"></i> Dashboard</Link>
-          <Link to="/browse" onClick={() => { toggleMobileMenu(); setCurrentFolderId(null); }} className="flex items-center gap-3 hover:text-primary transition-colors"><i className="fa-solid fa-folder-tree w-6 text-center"></i> Organized Files</Link>
+          <Link to="/browse" onClick={() => { toggleMobileMenu(); setCurrentFolderId(null); }} className="flex items-center gap-3 hover:text-primary transition-colors"><i className="fa-solid fa-folder-tree w-6 text-center"></i> Files</Link>
           <Link to="/pricing" onClick={toggleMobileMenu} className="flex items-center gap-3 hover:text-primary transition-colors"><i className="fa-solid fa-tag w-6 text-center"></i> Pricing</Link>
           <Link to="/account" onClick={toggleMobileMenu} className="flex items-center gap-3 hover:text-primary transition-colors"><i className="fa-solid fa-gear w-6 text-center"></i> Account Settings</Link>
           <button onClick={handleLogout} className="flex items-center gap-3 text-red-500 mt-4"><i className="fa-solid fa-right-from-bracket w-6 text-center"></i> Log Out</button>
@@ -251,7 +257,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               className={`flex items-center gap-3 px-4 py-3 rounded-lg border border-transparent transition-all group ${isActive('/browse') ? 'text-gray-900 dark:text-white border-gray-200 dark:border-white/10 shadow-sm bg-gray-100 dark:bg-white/5' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'}`} to="/browse"
             >
               <i className={`fa-solid fa-folder-tree w-5 text-center ${isActive('/browse') ? 'text-primary' : 'group-hover:text-gray-700 dark:group-hover:text-gray-200'}`}></i>
-              <span className="font-medium">Organized Files</span>
+              <span className="font-medium">Files</span>
             </Link>
             <Link className={`flex items-center gap-3 px-4 py-3 rounded-lg border border-transparent transition-all group ${isActive('/account') ? 'text-gray-900 dark:text-white border-gray-200 dark:border-white/10 shadow-sm bg-gray-100 dark:bg-white/5' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'}`} to="/account">
               <i className={`fa-solid fa-gear w-5 text-center ${isActive('/account') ? 'text-primary' : 'group-hover:text-gray-700 dark:group-hover:text-gray-200'}`}></i>
