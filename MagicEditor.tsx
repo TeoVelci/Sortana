@@ -3,6 +3,7 @@ import { FileSystemItem, useApp } from './AppContext';
 import { editImageWithAI } from './aiService';
 import { useToast } from './ToastContext';
 import { getPublicUrl } from './storageService';
+import { useAwsUrl } from './useAwsUrl';
 
 interface MagicEditorProps {
   item: FileSystemItem;
@@ -28,6 +29,7 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
   const [isComparing, setIsComparing] = useState(false); // True when user holds "Compare"
 
   const isVideo = item.fileType === 'video';
+  const directAwsUrl = useAwsUrl(item.proxyS3Key || item.s3Key);
 
   const handleGenerate = async () => {
     if (isVideo) {
@@ -120,7 +122,7 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
                 {isVideo ? (
                     <div className="relative flex justify-center items-center h-full w-full bg-black">
                         <video 
-                            src={getPublicUrl(item.proxyS3Key || item.s3Key!)}
+                            src={directAwsUrl || undefined}
                             controls
                             className="max-w-full max-h-[calc(100vh-280px)] object-contain"
                         />

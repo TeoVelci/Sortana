@@ -40,14 +40,27 @@ serve(async (req) => {
 
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
       
-      // Redirect directly to the presigned URL so it can be used in <img> and <video> tags
-      return new Response(null, {
-        status: 302,
-        headers: {
-          ...corsHeaders,
-          'Location': signedUrl
-        }
-      });
+      const shouldRedirect = url.searchParams.get('redirect') !== 'false';
+
+      if (shouldRedirect) {
+        // Redirect directly to the presigned URL so it can be used in <img> tags
+        return new Response(null, {
+          status: 302,
+          headers: {
+            ...corsHeaders,
+            'Location': signedUrl
+          }
+        });
+      } else {
+        // Return JSON with the presigned URL
+        return new Response(JSON.stringify({ url: signedUrl }), {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
     }
 
     // Handle POST request for generating upload URLs

@@ -2,12 +2,32 @@ import React, { useState, useEffect, useCallback, useRef, MouseEvent as ReactMou
 import { useApp, FileSystemItem } from './AppContext';
 import { useToast } from './ToastContext';
 import { getPublicUrl } from './storageService';
+import { useAwsUrl } from './useAwsUrl';
 import { supabase } from './supabaseClient';
 import MagicEditor from './MagicEditor';
 import ExportModal from './ExportModal';
 import CleanupModal from './CleanupModal';
 import { FixedSizeGrid as Grid } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
+
+// --- Subcomponents ---
+const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
+    const s3Key = item.proxyS3Key || item.s3Key;
+    const directUrl = useAwsUrl(s3Key);
+    return (
+        <video 
+            src={directUrl ? `${directUrl}#t=0.001` : ''}
+            poster={item.thumbnailUrl || item.previewUrl || undefined}
+            className="w-full h-full object-contain"
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            onMouseOver={(e) => { e.currentTarget.play().catch(() => {}); }}
+            onMouseOut={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0.001; }}
+        />
+    );
+};
 
 // --- Types for Virtualized Cell ---
 interface CellData {
@@ -222,17 +242,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                 {item.type === 'file' && item.fileType === 'video' && (
                 <div className="relative w-full h-full flex items-center justify-center bg-black">
                     {(item.proxyS3Key || item.s3Key) ? (
-                        <video 
-                            src={getPublicUrl(item.proxyS3Key || item.s3Key!) + '#t=0.001'}
-                            poster={item.thumbnailUrl || item.previewUrl || undefined}
-                            className="w-full h-full object-contain"
-                            muted
-                            loop
-                            playsInline
-                            preload="metadata"
-                            onMouseOver={(e) => { e.currentTarget.play().catch(() => {}); }}
-                            onMouseOut={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0.001; }}
-                        />
+                        <VideoThumbnail item={item} />
                     ) : (
                         <div className="flex flex-col items-center gap-2">
                             <i className="fa-solid fa-film text-4xl text-gray-600 animate-pulse"></i>
