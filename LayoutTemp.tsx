@@ -98,7 +98,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <header className="bg-white/80 dark:bg-background-dark/80 backdrop-blur-xl border-b border-gray-200 dark:border-white/10 h-16 flex items-center justify-between px-6 shrink-0 z-50 transition-colors duration-200 sticky top-0 lg:relative">
         {/* Logo */}
         <Link to="/dashboard" className="flex items-center gap-3 h-full group">
-          <span className="text-3xl font-black tracking-tighter text-primary">S</span>
+          <div className="relative w-8 h-8 flex items-center justify-center shrink-0">
+            <div className="absolute inset-0 bg-gradient-to-tr from-primary to-indigo-400 rounded-xl rotate-3 group-hover:rotate-6 transition-transform duration-300 opacity-80 shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div>
+            <div className="absolute inset-0 bg-white/20 backdrop-blur-sm rounded-xl -rotate-3 group-hover:-rotate-6 transition-transform duration-300"></div>
+            <div className="absolute inset-0 border border-white/40 rounded-xl"></div>
+            <div className="grid grid-cols-2 gap-0.5 p-1.5 z-10 w-full h-full">
+              <div className="bg-white rounded-sm w-full h-full shadow-sm"></div>
+              <div className="bg-white/80 rounded-sm w-full h-full shadow-sm"></div>
+              <div className="bg-white/60 rounded-sm w-full h-full shadow-sm"></div>
+              <div className="bg-white/90 rounded-sm w-full h-full shadow-sm"></div>
+            </div>
+          </div>
+          <span className="text-xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 group-hover:from-primary group-hover:to-indigo-400 transition-all duration-300">
+            Sortana <span className="font-light text-primary">AI</span>
+          </span>
         </Link>
 
         {/* Desktop Nav */}
