@@ -16,7 +16,7 @@ const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
     const directUrl = useAwsUrl(s3Key);
     return (
         <video 
-            src={directUrl ? `${directUrl}#t=0.001` : ''}
+            src={directUrl ? `${directUrl}#t=0.001` : undefined}
             poster={item.thumbnailUrl || item.previewUrl || undefined}
             className="w-full h-full object-contain"
             muted
