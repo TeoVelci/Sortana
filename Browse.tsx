@@ -1,10 +1,294 @@
-
 import React, { useState, useEffect, useCallback, useRef, MouseEvent as ReactMouseEvent, CSSProperties } from 'react';
 import { useApp, FileSystemItem } from './AppContext';
 import { useToast } from './ToastContext';
+import { getPublicUrl } from './storageService';
+import { supabase } from './supabaseClient';
 import MagicEditor from './MagicEditor';
 import ExportModal from './ExportModal';
 import CleanupModal from './CleanupModal';
+import { FixedSizeGrid as Grid } from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
+
+// --- Types for Virtualized Cell ---
+interface CellData {
+    items: FileSystemItem[];
+    columnCount: number;
+    selectedIds: Set<string>;
+    isStackingEnabled: boolean;
+    allContextItems: FileSystemItem[]; // All items context for calculating stacks cheaply
+    searchQuery: string;
+    onItemClick: (e: ReactMouseEvent, item: FileSystemItem) => void;
+    onItemDoubleClick: (e: ReactMouseEvent, item: FileSystemItem) => void;
+    onDragStart: (e: React.DragEvent, item: FileSystemItem) => void;
+    onAnalyzeVideo: (id: string) => void;
+    handleTagClick: (tag: string) => void;
+    userPlan: string;
+    getMatchSnippet: (item: FileSystemItem, query: string) => any;
+    retryUpload?: (id: string) => Promise<void>;
+    generateVideoProxy?: (id: string) => Promise<void>;
+}
+
+interface CellProps {
+    columnIndex: number;
+    rowIndex: number;
+    style: CSSProperties;
+    data: CellData;
+}
+
+// --- Sub-Components ---
+const StarRating = ({ rating, onChange }: { rating: number, onChange?: (r: number) => void }) => {
+    return (
+      <div className="flex text-yellow-400 gap-0.5">
+        {[1, 2, 3, 4, 5].map(star => (
+          <button 
+            key={star} 
+            onClick={(e) => { e.stopPropagation(); if (onChange) onChange(star); }}
+            className={`material-icons-outlined text-lg ${onChange ? 'cursor-pointer hover:scale-110' : ''}`}
+          >
+            {rating >= star ? 'star' : 'star_border'}
+          </button>
+        ))}
+      </div>
+    );
+};
+
+// --- Virtualized Cell Component ---
+const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }) => {
+    const { 
+        items, 
+        columnCount, 
+        selectedIds, 
+        isStackingEnabled, 
+        allContextItems, 
+        searchQuery,
+        onItemClick, 
+        onItemDoubleClick, 
+        onDragStart,
+        onAnalyzeVideo,
+        handleTagClick,
+        userPlan,
+        getMatchSnippet,
+        retryUpload
+    } = data;
+
+    const index = rowIndex * columnCount + columnIndex;
+    
+    // Boundary check
+    if (index >= items.length) {
+        return null;
+    }
+
+    const item = items[index];
+    const isSelected = selectedIds.has(item.id);
+    const matchSnippet = searchQuery ? getMatchSnippet(item, searchQuery) : null;
+    const isStack = item.groupId && item.isStackTop && isStackingEnabled;
+
+    // Calculate Stack Count (Cheap lookup since we passed allContextItems)
+    const stackCount = isStack ? allContextItems.filter(i => i.groupId === item.groupId && i.syncStatus !== 'deleted').length : 0;
+
+    // Adjust style for gap (padding inside the cell)
+    const gutter = 12; // Half of gap-6 (24px)
+    const cellStyle = {
+        ...style,
+        left: (style.left as number) + gutter,
+        top: (style.top as number) + gutter,
+        width: (style.width as number) - (gutter * 2),
+        height: (style.height as number) - (gutter * 2),
+    };
+
+    return (
+        <div 
+            style={cellStyle}
+            className={`group cursor-pointer relative flex flex-col transition-transform duration-200 ${isSelected ? 'scale-95' : 'hover:scale-[1.02]'}`}
+            onClick={(e) => { e.stopPropagation(); onItemClick(e, item); }}
+            onDoubleClick={(e) => { e.stopPropagation(); onItemDoubleClick(e, item); }}
+            draggable
+            onDragStart={(e) => onDragStart(e, item)}
+        >
+            {/* STACK EFFECT UNDERLAY */}
+            {isStack && (
+                <div className="absolute top-1 left-2 w-[calc(100%-16px)] aspect-square bg-gray-300 dark:bg-dark-800 rounded-2xl border border-white/10 rotate-2 z-0"></div>
+            )}
+            {isStack && stackCount > 2 && (
+                    <div className="absolute top-2 left-3 w-[calc(100%-24px)] aspect-square bg-gray-400 dark:bg-dark-700 rounded-2xl border border-white/10 -rotate-1 z-0"></div>
+            )}
+
+            {/* Square Box */}
+            <div className={`w-full aspect-square bg-gray-100 dark:bg-dark-900 rounded-2xl flex items-center justify-center p-1 mb-3 border transition-all relative overflow-hidden shrink-0 z-10 ${isSelected ? 'border-primary ring-2 ring-primary/50' : 'border-transparent dark:border-white/10 hover:border-primary/50'}`}>
+            
+            {/* Selection Checkmark */}
+            <div className={`absolute top-2 left-2 z-30 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : 'bg-black/30 border-white hover:bg-black/50'}`}>
+                    {isSelected && <i className="fa-solid fa-check text-white text-xs"></i>}
+                </div>
+            </div>
+
+            {/* SYNC STATUS BADGE (DIRTY STATE) */}
+            {item.syncStatus !== 'synced' && (
+                <div className="absolute top-2 right-10 z-30 flex items-center gap-1.5" title={`Status: ${item.syncStatus}`}>
+                     {item.syncStatus === 'error' ? (
+                         <button 
+                            onClick={(e) => { 
+                                e.stopPropagation(); 
+                                if (item.description === 'Proxy failed.' || item.description === 'Proxy timed out.') {
+                                    (data as any).generateVideoProxy?.(item.id);
+                                } else if (retryUpload) {
+                                    retryUpload(item.id); 
+                                }
+                            }}
+                            className="bg-red-500 text-white p-1 rounded-md hover:bg-red-600 transition-colors flex items-center gap-1 shadow-lg"
+                            title={item.description === 'Proxy failed.' || item.description === 'Proxy timed out.' ? "Proxy failed. Click to retry." : "Upload failed. Click to retry."}
+                         >
+                            <i className="fa-solid fa-rotate-right text-[10px]"></i>
+                            <span className="text-[9px] font-bold">RETRY</span>
+                         </button>
+                     ) : (
+                        <i className="fa-solid fa-cloud-arrow-up text-gray-400 dark:text-gray-500 animate-bounce"></i>
+                     )}
+                </div>
+            )}
+
+            {/* STACK BADGE */}
+            {isStack && (
+                <div className="absolute top-2 right-2 z-30 bg-black/70 backdrop-blur-sm text-white text-xs font-bold px-2 py-0.5 rounded-md border border-white/20 shadow-lg">
+                    {stackCount}
+                </div>
+            )}
+
+            {/* Metadata Overlays (Only if NOT a stack badge location) */}
+            {item.type === 'file' && !isStack && (
+                <>
+                    <div className="absolute top-2 right-2 flex gap-1 z-20">
+                        {item.isAnalyzing && (
+                        <div className="flex items-center gap-1 bg-white/90 dark:bg-black/70 px-2 py-0.5 rounded-full backdrop-blur-sm border border-primary/30 shadow-sm">
+                            <i className="fa-solid fa-circle-notch fa-spin text-primary text-[10px]"></i>
+                            <span className="text-[10px] font-medium text-primary">AI</span>
+                        </div>
+                        )}
+                        {item.flag === 'picked' && <span className="material-icons-outlined text-green-500 bg-white dark:bg-black/50 rounded-full p-0.5 text-sm">flag</span>}
+                        {item.flag === 'rejected' && <span className="material-icons-outlined text-red-500 bg-white dark:bg-black/50 rounded-full p-0.5 text-sm">block</span>}
+                    </div>
+                    <div className="absolute bottom-2 left-2 z-20">
+                        {item.rating && item.rating > 0 ? <StarRating rating={item.rating} /> : null}
+                    </div>
+                </>
+            )}
+            
+            {/* MATCH SNIPPET OVERLAY */}
+            {matchSnippet && (
+                <div className="absolute bottom-12 left-2 right-2 z-20 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="bg-black/80 backdrop-blur-md text-white text-[10px] p-2 rounded-lg border border-primary/30 shadow-neon-strong flex items-start gap-2">
+                        <i className={`fa-solid ${matchSnippet.type === 'moment' ? 'fa-clapperboard text-pink-400' : matchSnippet.type === 'tag' ? 'fa-tag text-blue-400' : 'fa-align-left text-primary'} mt-0.5`}></i>
+                        <div className="overflow-hidden">
+                            {matchSnippet.timestamp && <span className="font-mono bg-white/20 px-1 rounded mr-1 text-[9px]">{matchSnippet.timestamp}</span>}
+                            <span className="truncate block font-medium" title={matchSnippet.text}>{matchSnippet.text}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Content Preview */}
+            <div className="w-full h-full flex items-center justify-center">
+                {item.type === 'folder' && (
+                <i className="fa-solid fa-folder text-6xl text-gray-400 group-hover:text-primary transition-colors"></i>
+                )}
+                {item.type === 'file' && (item.fileType === 'image' || item.fileType === 'raw') && (
+                (item.thumbnailUrl || item.previewUrl) ? 
+                <img 
+                    src={item.thumbnailUrl || item.previewUrl} 
+                    alt={item.name} 
+                    className="w-full h-full object-contain"
+                    loading="lazy"
+                    onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const parent = e.currentTarget.parentElement;
+                        if (parent) {
+                            parent.classList.add('bg-gray-200','dark:bg-dark-800');
+                            const warning = document.createElement('div');
+                            warning.className = 'flex flex-col items-center gap-1 text-gray-400';
+                            warning.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xl"></i><span class="text-[8px] font-bold">PREVIEW ERROR</span>';
+                            parent.appendChild(warning);
+                        }
+                    }}
+                /> :
+                <div className="flex flex-col items-center gap-2">
+                    <span className="material-icons-outlined text-5xl text-gray-500">
+                        {item.fileType === 'raw' ? 'camera' : 'image'}
+                    </span>
+                    {item.fileType === 'raw' && <span className="text-[10px] uppercase font-bold text-gray-500">RAW</span>}
+                </div>
+                )}
+                
+                {item.type === 'file' && item.fileType === 'video' && (
+                <div className="relative w-full h-full flex items-center justify-center bg-black">
+                    {(item.proxyS3Key || item.s3Key) ? (
+                        <video 
+                            src={getPublicUrl(item.proxyS3Key || item.s3Key!)}
+                            poster={item.thumbnailUrl || item.previewUrl || undefined}
+                            className="w-full h-full object-contain"
+                            muted
+                            loop
+                            playsInline
+                            onMouseOver={(e) => { e.currentTarget.play().catch(() => {}); }}
+                            onMouseOut={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
+                        />
+                    ) : (
+                        <div className="flex flex-col items-center gap-2">
+                            <i className="fa-solid fa-film text-4xl text-gray-600 animate-pulse"></i>
+                            <span className="text-[8px] text-gray-500 font-bold uppercase">
+                                {item.syncStatus === 'uploading' ? 'Uploading...' : 
+                                 item.description === 'Upload failed.' ? 'Upload Failed' :
+                                 (item.description === 'Proxy failed.' || item.description === 'Proxy timed out.') ? 'Proxy Failed' : 
+                                 'Processing Proxy'}
+                            </span>
+                        </div>
+                    )}
+                    <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <i className="fa-solid fa-play text-[8px]"></i>
+                        VIDEO
+                    </span>
+                </div>
+                )}
+                {item.type === 'file' && item.fileType === 'doc' && (
+                <div className="flex flex-col items-center gap-2">
+                        <span className="material-icons-outlined text-5xl text-gray-500">description</span>
+                </div>
+                )}
+            </div>
+            </div>
+
+            {/* Text Info */}
+            <div className="text-center px-1">
+            <h3 className={`text-sm font-medium truncate transition-colors ${isSelected ? 'text-primary' : 'text-gray-700 dark:text-gray-200 group-hover:text-primary'}`}>
+                {item.name}
+            </h3>
+            <div className="flex flex-wrap justify-center gap-1 mt-1 min-h-[1.25rem]">
+                {isStack ? (
+                    <span className="text-[10px] bg-gray-200 dark:bg-dark-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-full font-bold">
+                        Burst Stack
+                    </span>
+                ) : (
+                    item.isAnalyzing ? (
+                        <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full animate-pulse font-medium">
+                            {item.analysisStatus || 'Analyzing...'}
+                        </span>
+                    ) : (
+                        item.tags?.slice(0, 3).map((tag, i) => (
+                        <span 
+                            key={i} 
+                            onClick={(e) => { e.stopPropagation(); handleTagClick(tag); }}
+                            className="text-[10px] bg-gray-200 dark:bg-dark-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full hover:bg-primary hover:text-white transition-colors cursor-pointer"
+                        >
+                            {tag}
+                        </span>
+                        ))
+                    )
+                )}
+            </div>
+            </div>
+        </div>
+    );
+};
 
 const Browse: React.FC = () => {
   const { 
@@ -24,7 +308,8 @@ const Browse: React.FC = () => {
       formatSize,
       user,
       currentFolderId,
-      setCurrentFolderId
+      setCurrentFolderId,
+      generateVideoProxy
   } = useApp();
   
   const { showToast } = useToast();
@@ -691,211 +976,58 @@ const Browse: React.FC = () => {
           {/* Virtualized Items Grid */}
           <div 
              id="browse-grid"
-             className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar"
+             className="flex-1" // IMPORTANT: No padding here, AutoSizer needs full space
              onClick={() => { /* clicking empty space */ setSelectedIds(new Set()) }}
           >
             {currentItems.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 auto-rows-max">
-                    {currentItems.map((item, index) => {
-                        const isSelected = selectedIds.has(item.id);
-                        const matchSnippet = searchQuery ? getMatchSnippet(item, searchQuery) : null;
-                        const isStack = item.groupId && item.isStackTop && isStackingEnabled;
-                        const stackCount = isStack ? items.filter(i => i.groupId === item.groupId && i.syncStatus !== 'deleted').length : 0;
+                <AutoSizer>
+                    {({ height, width }) => {
+                        // Calculate columns based on width (responsive logic)
+                        let columnCount = 2;
+                        if (width >= 768) columnCount = 3;
+                        if (width >= 1024) columnCount = 4;
+                        if (width >= 1280) columnCount = 5;
+
+                        // Calculate rows
+                        const rowCount = Math.ceil(currentItems.length / columnCount);
+                        
+                        // Dynamic Row height based on column width to maintain square aspect ratio for boxes
+                        // Card is aspect-square + text block (~110px)
+                        const columnWidth = width / columnCount;
+                        const ROW_HEIGHT = columnWidth + 110;
 
                         return (
-                            <div 
-                                key={item.id}
-                                className={`group cursor-pointer relative flex flex-col transition-transform duration-200 ${isSelected ? 'scale-95' : 'hover:scale-[1.02]'}`}
-                                onClick={(e) => { e.stopPropagation(); handleItemClick(e, item); }}
-                                onDoubleClick={(e) => { e.stopPropagation(); handleItemDoubleClick(e, item); }}
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, item)}
+                            <Grid
+                                columnCount={columnCount}
+                                columnWidth={width / columnCount}
+                                height={height}
+                                rowCount={rowCount}
+                                rowHeight={ROW_HEIGHT}
+                                width={width}
+                                itemData={{
+                                    items: currentItems,
+                                    columnCount,
+                                    selectedIds,
+                                    isStackingEnabled,
+                                    allContextItems: items,
+                                    searchQuery,
+                                    onItemClick: handleItemClick,
+                                    onItemDoubleClick: handleItemDoubleClick,
+                                    onDragStart: handleDragStart,
+                                    onAnalyzeVideo: handleAnalyzeVideo,
+                                    handleTagClick: handleTagClick,
+                                    userPlan: user.plan,
+                                    getMatchSnippet: getMatchSnippet,
+                                    retryUpload: retryUpload,
+                                    generateVideoProxy: generateVideoProxy
+                                }}
                             >
-                                {/* STACK EFFECT UNDERLAY */}
-                                {isStack && (
-                                    <div className="absolute top-1 left-2 w-[calc(100%-16px)] aspect-square bg-gray-300 dark:bg-dark-800 rounded-2xl border border-white/10 rotate-2 z-0"></div>
-                                )}
-                                {isStack && stackCount > 2 && (
-                                        <div className="absolute top-2 left-3 w-[calc(100%-24px)] aspect-square bg-gray-400 dark:bg-dark-700 rounded-2xl border border-white/10 -rotate-1 z-0"></div>
-                                )}
-
-                                {/* Square Box */}
-                                <div className={`w-full aspect-square bg-gray-100 dark:bg-dark-900 rounded-2xl flex items-center justify-center p-1 mb-3 border transition-all relative overflow-hidden shrink-0 z-10 ${isSelected ? 'border-primary ring-2 ring-primary/50' : 'border-transparent dark:border-white/10 hover:border-primary/50'}`}>
-                                
-                                {/* Selection Checkmark */}
-                                <div className={`absolute top-2 left-2 z-30 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : 'bg-black/30 border-white hover:bg-black/50'}`}>
-                                        {isSelected && <i className="fa-solid fa-check text-white text-xs"></i>}
-                                    </div>
-                                </div>
-
-                                {/* SYNC STATUS BADGE (DIRTY STATE) */}
-                                {item.syncStatus !== 'synced' && (
-                                    <div className="absolute top-2 right-10 z-30 flex items-center gap-1.5" title={`Status: ${item.syncStatus}`}>
-                                        {item.syncStatus === 'error' ? (
-                                            <button 
-                                                onClick={(e) => { 
-                                                    e.stopPropagation(); 
-                                                    if (item.description === 'Proxy failed.' || item.description === 'Proxy timed out.') {
-                                                        generateVideoProxy(item.id);
-                                                    } else if (retryUpload) {
-                                                        retryUpload(item.id); 
-                                                    }
-                                                }}
-                                                className="bg-red-500 text-white p-1 rounded-md hover:bg-red-600 transition-colors flex items-center gap-1 shadow-lg"
-                                                title={item.description === 'Proxy failed.' || item.description === 'Proxy timed out.' ? "Proxy failed. Click to retry." : "Upload failed. Click to retry."}
-                                            >
-                                                <i className="fa-solid fa-rotate-right text-[10px]"></i>
-                                                <span className="text-[9px] font-bold">RETRY</span>
-                                            </button>
-                                        ) : (
-                                            <i className="fa-solid fa-cloud-arrow-up text-gray-400 dark:text-gray-500 animate-bounce"></i>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* STACK BADGE */}
-                                {isStack && (
-                                    <div className="absolute top-2 right-2 z-30 bg-black/70 backdrop-blur-sm text-white text-xs font-bold px-2 py-0.5 rounded-md border border-white/20 shadow-lg">
-                                        {stackCount}
-                                    </div>
-                                )}
-
-                                {/* Metadata Overlays (Only if NOT a stack badge location) */}
-                                {item.type === 'file' && !isStack && (
-                                    <>
-                                        <div className="absolute top-2 right-2 flex gap-1 z-20">
-                                            {item.isAnalyzing && (
-                                            <div className="flex items-center gap-1 bg-white/90 dark:bg-black/70 px-2 py-0.5 rounded-full backdrop-blur-sm border border-primary/30 shadow-sm">
-                                                <i className="fa-solid fa-circle-notch fa-spin text-primary text-[10px]"></i>
-                                                <span className="text-[10px] font-medium text-primary">AI</span>
-                                            </div>
-                                            )}
-                                            {item.flag === 'picked' && <span className="material-icons-outlined text-green-500 bg-white dark:bg-black/50 rounded-full p-0.5 text-sm">flag</span>}
-                                            {item.flag === 'rejected' && <span className="material-icons-outlined text-red-500 bg-white dark:bg-black/50 rounded-full p-0.5 text-sm">block</span>}
-                                        </div>
-                                        <div className="absolute bottom-2 left-2 z-20">
-                                            {item.rating && item.rating > 0 ? <StarRating rating={item.rating} /> : null}
-                                        </div>
-                                    </>
-                                )}
-                                
-                                {/* MATCH SNIPPET OVERLAY */}
-                                {matchSnippet && (
-                                    <div className="absolute bottom-12 left-2 right-2 z-20 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                        <div className="bg-black/80 backdrop-blur-md text-white text-[10px] p-2 rounded-lg border border-primary/30 shadow-neon-strong flex items-start gap-2">
-                                            <i className={`fa-solid ${matchSnippet.type === 'moment' ? 'fa-clapperboard text-pink-400' : matchSnippet.type === 'tag' ? 'fa-tag text-blue-400' : 'fa-align-left text-primary'} mt-0.5`}></i>
-                                            <div className="overflow-hidden">
-                                                {matchSnippet.timestamp && <span className="font-mono bg-white/20 px-1 rounded mr-1 text-[9px]">{matchSnippet.timestamp}</span>}
-                                                <span className="truncate block font-medium" title={matchSnippet.text}>{matchSnippet.text}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Content Preview */}
-                                <div className="w-full h-full flex items-center justify-center">
-                                    {item.type === 'folder' && (
-                                    <i className="fa-solid fa-folder text-6xl text-gray-400 group-hover:text-primary transition-colors"></i>
-                                    )}
-                                    {item.type === 'file' && (item.fileType === 'image' || item.fileType === 'raw') && (
-                                    (item.thumbnailUrl || item.previewUrl) ? 
-                                    <img 
-                                        src={item.thumbnailUrl || item.previewUrl} 
-                                        alt={item.name} 
-                                        className="w-full h-full object-contain"
-                                        loading="lazy"
-                                        onError={(e) => {
-                                            e.currentTarget.style.display = 'none';
-                                            const parent = e.currentTarget.parentElement;
-                                            if (parent) {
-                                                parent.classList.add('bg-gray-200','dark:bg-dark-800');
-                                                const warning = document.createElement('div');
-                                                warning.className = 'flex flex-col items-center gap-1 text-gray-400';
-                                                warning.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xl"></i><span class="text-[8px] font-bold">PREVIEW ERROR</span>';
-                                                parent.appendChild(warning);
-                                            }
-                                        }}
-                                    /> :
-                                    <div className="flex flex-col items-center gap-2">
-                                        <span className="material-icons-outlined text-5xl text-gray-500">
-                                            {item.fileType === 'raw' ? 'camera' : 'image'}
-                                        </span>
-                                        {item.fileType === 'raw' && <span className="text-[10px] uppercase font-bold text-gray-500">RAW</span>}
-                                    </div>
-                                    )}
-                                    
-                                    {item.type === 'file' && item.fileType === 'video' && (
-                                    <div className="relative w-full h-full flex items-center justify-center bg-black">
-                                        {(item.proxyS3Key || item.s3Key) ? (
-                                            <video 
-                                                src={getPublicUrl(item.proxyS3Key || item.s3Key!)}
-                                                poster={item.thumbnailUrl || item.previewUrl || undefined}
-                                                className="w-full h-full object-contain"
-                                                muted
-                                                loop
-                                                playsInline
-                                                onMouseOver={(e) => { e.currentTarget.play().catch(() => {}); }}
-                                                onMouseOut={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
-                                            />
-                                        ) : (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <i className="fa-solid fa-film text-4xl text-gray-600 animate-pulse"></i>
-                                                <span className="text-[8px] text-gray-500 font-bold uppercase">
-                                                    {item.syncStatus === 'uploading' ? 'Uploading...' : 
-                                                    item.description === 'Upload failed.' ? 'Upload Failed' :
-                                                    (item.description === 'Proxy failed.' || item.description === 'Proxy timed out.') ? 'Proxy Failed' : 
-                                                    'Processing Proxy'}
-                                                </span>
-                                            </div>
-                                        )}
-                                        <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1">
-                                            <i className="fa-solid fa-play text-[8px]"></i>
-                                            VIDEO
-                                        </span>
-                                    </div>
-                                    )}
-                                    {item.type === 'file' && item.fileType === 'doc' && (
-                                    <div className="flex flex-col items-center gap-2">
-                                            <span className="material-icons-outlined text-5xl text-gray-500">description</span>
-                                    </div>
-                                    )}
-                                </div>
-                                </div>
-
-                                {/* Text Info */}
-                                <div className="text-center px-1">
-                                <h3 className={`text-sm font-medium truncate transition-colors ${isSelected ? 'text-primary' : 'text-gray-700 dark:text-gray-200 group-hover:text-primary'}`}>
-                                    {item.name}
-                                </h3>
-                                <div className="flex flex-wrap justify-center gap-1 mt-1 min-h-[1.25rem]">
-                                    {isStack ? (
-                                        <span className="text-[10px] bg-gray-200 dark:bg-dark-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-full font-bold">
-                                            Burst Stack
-                                        </span>
-                                    ) : (
-                                        item.isAnalyzing ? (
-                                            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full animate-pulse font-medium">
-                                                {item.analysisStatus || 'Analyzing...'}
-                                            </span>
-                                        ) : (
-                                            item.tags?.slice(0, 3).map((tag, i) => (
-                                            <span 
-                                                key={i} 
-                                                onClick={(e) => { e.stopPropagation(); handleTagClick(tag); }}
-                                                className="text-[10px] bg-gray-200 dark:bg-dark-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full hover:bg-primary hover:text-white transition-colors cursor-pointer"
-                                            >
-                                                {tag}
-                                            </span>
-                                            ))
-                                        )
-                                    )}
-                                </div>
-                                </div>
-                            </div>
+                                {VirtualCell}
+                            </Grid>
                         );
-                    })}
-                </div>) : (
+                    }}
+                </AutoSizer>
+            ) : (
                 <div className="flex flex-col items-center justify-center h-full text-gray-500">
                     <span className="material-icons-outlined text-6xl mb-4 text-gray-300 dark:text-zinc-700">filter_none</span>
                     <p className="text-lg">No items match your filters.</p>
@@ -1323,7 +1455,7 @@ const Browse: React.FC = () => {
                 
                 {activeCullingItem.fileType === 'video' ? (
                     <video 
-                        src={activeCullingItem.proxyS3Key ? `/api/file-view?key=${encodeURIComponent(activeCullingItem.proxyS3Key)}` : activeCullingItem.previewUrl} 
+                        src={getPublicUrl(activeCullingItem.proxyS3Key || activeCullingItem.s3Key!)}
                         controls
                         autoPlay
                         loop
@@ -1333,7 +1465,7 @@ const Browse: React.FC = () => {
                     />
                 ) : (
                     <img 
-                        src={activeCullingItem.previewUrl} 
+                        src={activeCullingItem.previewUrl || activeCullingItem.thumbnailUrl || getPublicUrl(activeCullingItem.s3Key!)}
                         alt={activeCullingItem.name} 
                         className="max-w-full max-h-full object-contain shadow-2xl z-10"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
