@@ -1060,24 +1060,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
               // TRIGGER PROXY GENERATION AFTER UPLOAD SUCCESS
               if (fType === 'video') {
-                  // On serverless, we don't call generateVideoProxy, 
-                  // just mark as finished using the original file as proxy.
-                  setItems(prev => prev.map(i => i.id === id ? { 
-                      ...i, 
-                      proxyS3Key: key, 
-                      description: 'Using original source.',
-                      syncStatus: 'synced' 
-                  } : i));
-                  
-                  upsertItem({ 
-                      ...newItem, 
-                      s3Key: key, 
-                      proxyS3Key: key, 
-                      syncStatus: 'synced', 
-                      description: 'Using original source.',
-                      previewUrl: finalPreviewUrl,
-                      thumbnailUrl: finalThumbnailUrl
-                  });
+                  generateVideoProxy(id, key);
               }
           } catch (error: any) {
               console.error(`Upload failed for ${f.name}`, error);
