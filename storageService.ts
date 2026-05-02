@@ -9,53 +9,24 @@ export interface UploadResult {
 const BUCKET_NAME = 'sortana'; // Default bucket name
 
 /**
- * Generates a unique key for the file in Supabase Storage.
- * In a serverless environment, we bypass the /api/upload-url call.
+ * Generates a unique presigned URL for the file via the Supabase Edge Function.
  */
-export const getPresignedUrl = async (filename: string, _filetype: string): Promise<UploadResult> => {
-  // Instead of a real presigned URL, we return a "supabase://" protocol URL
-  // that our uploadFile function will recognize.
-  const timestamp = Date.now();
-  const key = `uploads/${timestamp}-${filename}`;
-  return {
-    url: `supabase://${key}`,
-    key: key
-  };
+export const getPresignedUrl = async (filename: string, filetype: string): Promise<UploadResult> => {
+  const { data, error } = await supabase.functions.invoke('get-aws-presigned-url', {
+    body: { filename, filetype }
+  });
+
+  if (error) throw error;
+  return data; // { url: string, key: string }
 };
 
 /**
- * Uploads a file directly to Supabase Storage.
- * Handles both the custom "supabase://" protocol and standard URLs for backward compatibility.
+ * Uploads a file directly to AWS S3 using the presigned URL.
  */
 export const uploadFileToS3 = async (file: File | Blob, url: string, retries = 3): Promise<void> => {
   let lastError: any;
 
-  // Check if this is a Supabase direct upload
-  if (url.startsWith('supabase://')) {
-    const key = url.replace('supabase://', '');
-    
-    for (let i = 0; i < retries; i++) {
-      try {
-        const { error } = await supabase.storage
-          .from(BUCKET_NAME)
-          .upload(key, file, {
-            contentType: file.type || 'application/octet-stream',
-            upsert: true,
-            cacheControl: '3600'
-          });
-
-        if (error) throw error;
-        return; // Success
-      } catch (error: any) {
-        lastError = error;
-        console.warn(`Supabase upload attempt ${i + 1} failed:`, error);
-        if (i < retries - 1) await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-      }
-    }
-    throw lastError || new Error('Supabase upload failed after retries');
-  }
-
-  // Fallback for standard S3 PUT uploads (if needed)
+  // Standard S3 PUT upload
   for (let i = 0; i < retries; i++) {
     try {
       const response = await fetch(url, {
@@ -65,7 +36,7 @@ export const uploadFileToS3 = async (file: File | Blob, url: string, retries = 3
       });
 
       if (response.ok) return;
-      lastError = new Error(`S3 Upload failed: ${response.status}`);
+      lastError = new Error(`S3 Upload failed: ${response.status} ${response.statusText}`);
     } catch (error: any) {
       lastError = error;
     }
@@ -75,26 +46,26 @@ export const uploadFileToS3 = async (file: File | Blob, url: string, retries = 3
 };
 
 /**
- * Gets a public URL for a file in Supabase Storage.
+ * Gets a public URL for a file via the Edge Function.
  */
 export const downloadFileFromS3 = async (key: string): Promise<Blob> => {
-  const { data, error } = await supabase.storage
-    .from(BUCKET_NAME)
-    .download(key);
-
-  if (error) throw error;
-  return data;
+  const url = getPublicUrl(key);
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+  return response.blob();
 };
 
 /**
- * Helper to get a public URL for display.
+ * Helper to get a public URL for display by hitting the edge function with GET method.
+ * The edge function returns a 302 redirect to the temporary presigned S3 URL,
+ * meaning this URL can safely be used directly in <img src="..." />.
  */
 export const getPublicUrl = (key: string): string => {
   if (!key) return '';
-  const { data } = supabase.storage
-    .from(BUCKET_NAME)
-    .getPublicUrl(key);
-  return data.publicUrl;
+  // Format the direct function URL. 
+  // We cannot use supabase.functions.invoke() synchronously, 
+  // so we build the public endpoint directly.
+  return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-aws-presigned-url?key=${encodeURIComponent(key)}`;
 };
 
 export const saveFileMetadata = async (
