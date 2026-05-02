@@ -117,7 +117,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             className={`hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer ${isActive('/browse') ? 'text-primary dark:text-primary' : ''}`}
             to="/browse"
           >
-            Organized Files
+            Files
           </Link>
           <Link className={`hover:text-gray-900 dark:hover:text-white transition-colors ${isActive('/account') ? 'text-primary dark:text-primary' : ''}`} to="/account">Account</Link>
         </nav>
