@@ -40,14 +40,8 @@ const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
         <video 
             src={directUrl ? `${directUrl}#t=0.001` : undefined}
             poster={item.thumbnailUrl || item.previewUrl || undefined}
-            className="w-full h-full object-contain"
-            style={{ 
-                WebkitTransform: 'translateZ(0)', 
-                transform: 'translateZ(0)', 
-                backfaceVisibility: 'hidden', 
-                WebkitBackfaceVisibility: 'hidden',
-                willChange: 'transform'
-            }}
+            className="w-full h-full object-contain bg-black"
+            crossOrigin="anonymous"
             muted
             loop
             playsInline
