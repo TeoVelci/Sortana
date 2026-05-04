@@ -125,6 +125,14 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
                             src={directAwsUrl || undefined}
                             controls
                             className="max-w-full max-h-[calc(100vh-280px)] object-contain"
+                            style={{ 
+                                WebkitTransform: 'translateZ(0)', 
+                                transform: 'translateZ(0)', 
+                                backfaceVisibility: 'hidden', 
+                                WebkitBackfaceVisibility: 'hidden',
+                                willChange: 'transform'
+                            }}
+                            playsInline
                         />
                     </div>
                 ) : (
