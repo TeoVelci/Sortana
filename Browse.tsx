@@ -39,9 +39,7 @@ const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
     return (
         <video 
             src={directUrl ? `${directUrl}#t=0.001` : undefined}
-            poster={item.thumbnailUrl || item.previewUrl || undefined}
             className="w-full h-full object-contain bg-black"
-            crossOrigin="anonymous"
             muted
             loop
             playsInline
