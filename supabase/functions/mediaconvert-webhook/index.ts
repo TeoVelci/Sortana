@@ -73,9 +73,9 @@ serve(async (req) => {
 
     // Fetch the matching item
     const { data: items, error: searchError } = await supabaseClient
-      .from('FileSystemItem')
+      .from('items')
       .select('*')
-      .like('s3Key', `%${filenameWithoutExt}%`);
+      .like('s3_key', `%${filenameWithoutExt}%`);
 
     if (searchError) {
         console.error("Search error:", searchError);
@@ -94,11 +94,11 @@ serve(async (req) => {
     
     // Update it
     const { error: updateError } = await supabaseClient
-        .from('FileSystemItem')
+        .from('items')
         .update({ 
-            proxyS3Key: proxyS3Key, 
+            proxy_s3_key: proxyS3Key, 
             description: fileItem.description?.replace('Generating proxy...', '') || '',
-            syncStatus: 'synced'
+            is_analyzing: false 
         })
         .eq('id', fileItem.id);
 

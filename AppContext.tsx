@@ -1339,13 +1339,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const finalUpdates: Partial<FileSystemItem> = {
               s3Key: key,
               syncStatus: 'synced',
-              description: item.fileType === 'video' ? 'Using original source.' : ''
+              description: item.fileType === 'video' ? 'Generating proxy...' : ''
           };
-          
-          if (item.fileType === 'video') {
-              finalUpdates.proxyS3Key = key;
-          }
-
           setItems(prev => prev.map(i => i.id === id ? { ...i, ...finalUpdates } : i));
           upsertItem({ ...item, ...finalUpdates });
           showToast("Upload retry successful!", "success");
