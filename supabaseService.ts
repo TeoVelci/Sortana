@@ -78,6 +78,42 @@ export const upsertItem = async (item: FileSystemItem) => {
   if (error) console.error('Error upserting item:', error);
 };
 
+export const updateItemInDB = async (id: string, updates: Partial<FileSystemItem>) => {
+  const dbUpdates: any = {};
+  
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.type !== undefined) dbUpdates.type = updates.type;
+  if (updates.fileType !== undefined) dbUpdates.file_type = updates.fileType;
+  if (updates.size !== undefined) dbUpdates.size = updates.size;
+  if (updates.parentId !== undefined) dbUpdates.parent_id = updates.parentId;
+  if (updates.s3Key !== undefined) dbUpdates.s3_key = updates.s3Key;
+  if (updates.previewUrl !== undefined) dbUpdates.preview_url = updates.previewUrl;
+  if (updates.tags !== undefined) dbUpdates.tags = updates.tags;
+  if (updates.description !== undefined) dbUpdates.description = updates.description;
+  if (updates.rating !== undefined) dbUpdates.rating = updates.rating;
+  if (updates.flag !== undefined) dbUpdates.flag = updates.flag;
+  if (updates.width !== undefined) dbUpdates.width = updates.width;
+  if (updates.height !== undefined) dbUpdates.height = updates.height;
+  if (updates.make !== undefined) dbUpdates.make = updates.make;
+  if (updates.model !== undefined) dbUpdates.model = updates.model;
+  if (updates.dateTaken !== undefined) dbUpdates.date_taken = updates.dateTaken ? new Date(updates.dateTaken).toISOString() : null;
+  if (updates.syncStatus !== undefined) dbUpdates.sync_status = updates.syncStatus;
+  if (updates.videoMetadata !== undefined) dbUpdates.video_metadata = updates.videoMetadata;
+  if (updates.proxyS3Key !== undefined) dbUpdates.proxy_s3_key = updates.proxyS3Key;
+  if (updates.groupId !== undefined) dbUpdates.group_id = updates.groupId;
+  if (updates.isStackTop !== undefined) dbUpdates.is_stack_top = updates.isStackTop;
+  if (updates.isAnalyzing !== undefined) dbUpdates.is_analyzing = updates.isAnalyzing;
+
+  if (Object.keys(dbUpdates).length === 0) return;
+
+  const { error } = await supabase
+    .from('items')
+    .update(dbUpdates)
+    .eq('id', id);
+
+  if (error) console.error('Error updating item:', error);
+};
+
 export const deleteItemFromDB = async (id: string) => {
   const { error } = await supabase
     .from('items')

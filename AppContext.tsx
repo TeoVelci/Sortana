@@ -5,7 +5,7 @@ import { saveFileToDB, getFileFromDB, deleteFileFromDB } from './dbService';
 import { useAuth } from './AuthContext';
 import { supabase } from './supabaseClient';
 import { getPresignedUrl, uploadFileToS3, downloadFileFromS3 } from './storageService';
-import { fetchItems, upsertItem, deleteItemFromDB as deleteItemFromSupabase, fetchUserProfile } from './supabaseService';
+import { fetchItems, upsertItem, updateItemInDB, deleteItemFromDB as deleteItemFromSupabase, fetchUserProfile } from './supabaseService';
 
 // --- Types ---
 
@@ -411,7 +411,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                           newItem.description = "";
                       }
                       itemChanged = true;
-                      upsertItem(newItem);
+                      updateItemInDB(newItem.id, { tags: newItem.tags, description: newItem.description });
                   }
 
                   // 5. Fix leftover proxy descriptions
@@ -419,7 +419,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       newItem.description = '';
                       newItem.isAnalyzing = false;
                       itemChanged = true;
-                      upsertItem(newItem);
+                      updateItemInDB(newItem.id, { description: '', isAnalyzing: false });
                   }
               }
               
@@ -740,7 +740,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               const latestItems = prev.map(i => {
                 if (i.id === task.id) {
                   const updated = { ...i, ...updates };
-                  upsertItem(updated);
+                  updateItemInDB(task.id, updates);
                   return updated;
                 }
                 return i;
@@ -754,13 +754,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (item) {
             const updates = { model: 'Sony Camera', isAnalyzing: false };
             setItems(prev => prev.map(i => i.id === task.id ? { ...i, ...updates } : i));
-            upsertItem({ ...item, ...updates });
+            updateItemInDB(task.id, updates);
           }
         }
       } catch (err) {
         console.warn("Background AI metadata analysis failed", err);
         // Clear analyzing flag on error too
-        setItems(prev => prev.map(i => i.id === task.id ? { ...i, isAnalyzing: false, model: 'Sony Camera' } : i));
+        const updates = { isAnalyzing: false, model: 'Sony Camera' };
+        setItems(prev => prev.map(i => i.id === task.id ? { ...i, ...updates } : i));
+        updateItemInDB(task.id, updates);
       } finally {
         setVideoMetadataQueue(prev => prev.slice(1));
         setIsProcessingVideoQueue(false);
@@ -1279,7 +1281,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setItems(prev => prev.map(i => {
           if (targetIds.has(i.id)) {
               const updated = { ...i, ...updates };
-              upsertItem(updated); // Persist
+              updateItemInDB(i.id, updates); // Persist
               return updated;
           }
           return i;
@@ -1291,7 +1293,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                setItems(prev => prev.map(i => {
                    const original = originalItems.find(o => o.id === i.id);
                    if (original) {
-                       upsertItem(original); // Revert persist
+                       updateItemInDB(original.id, original); // Revert persist
                        return original;
                    }
                    return i;
@@ -1301,7 +1303,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                setItems(prev => prev.map(i => {
                    if (targetIds.has(i.id)) {
                        const updated = { ...i, ...updates };
-                       upsertItem(updated);
+                       updateItemInDB(i.id, updates);
                        return updated;
                    }
                    return i;
@@ -1317,7 +1319,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (targetIds.has(i.id)) {
               const newTags = Array.from(new Set([...(i.tags || []), tag]));
               const updated = { ...i, tags: newTags };
-              upsertItem(updated); // Persist
+              updateItemInDB(i.id, { tags: newTags }); // Persist ONLY the fields updated
               return updated;
           }
           return i;
@@ -1329,7 +1331,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setItems(prev => prev.map(i => {
                   if (targetIds.has(i.id) && i.tags) {
                       const updated = { ...i, tags: i.tags.filter(t => t !== tag) };
-                      upsertItem(updated);
+                      updateItemInDB(i.id, { tags: updated.tags });
                       return updated;
                   }
                   return i;
@@ -1340,7 +1342,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   if (targetIds.has(i.id)) {
                       const newTags = Array.from(new Set([...(i.tags || []), tag]));
                       const updated = { ...i, tags: newTags };
-                      upsertItem(updated);
+                      updateItemInDB(i.id, { tags: newTags });
                       return updated;
                   }
                   return i;
