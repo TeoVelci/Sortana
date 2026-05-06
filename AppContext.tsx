@@ -506,7 +506,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (!hasRehydrated.current || items.length === 0) return;
     
-    const stuckItems = items.filter(i => i.isAnalyzing && !analysisQueue.some(q => q.id === i.id));
+    const stuckItems = items.filter(i => i.isAnalyzing && i.fileType === 'image' && !analysisQueue.some(q => q.id === i.id));
     if (stuckItems.length > 0) {
         const newTasks: BatchItem[] = stuckItems.map(i => ({
             id: i.id,
@@ -602,7 +602,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     isAnalyzing: false
                 };
                 // PERSIST TO SUPABASE
-                upsertItem(updated);
+                updateItemInDB(updated.id, { isAnalyzing: false, description: updated.description, tags: updated.tags });
                 return updated;
             }
             return item;
@@ -629,11 +629,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              }
          } else {
              console.error("Analysis Failed", e);
-             setItems(prev => prev.map(item => 
-                validBatch.some(b => b.id === item.id)
-                ? { ...item, isAnalyzing: false, description: "Analysis failed (Invalid format/size)." } 
-                : item
-             ));
+             setItems(prev => prev.map(item => {
+                if (validBatch.some(b => b.id === item.id)) {
+                    const updated = { ...item, isAnalyzing: false, description: "Analysis failed (Invalid format/size)." };
+                    updateItemInDB(updated.id, { isAnalyzing: false, description: updated.description });
+                    return updated;
+                }
+                return item;
+             }));
              setAnalysisQueue(prev => prev.slice(currentBatch.length));
          }
       } finally {
@@ -710,13 +713,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (item) {
             const updates = { model: 'Sony Camera', isAnalyzing: false };
             setItems(prev => prev.map(i => i.id === task.id ? { ...i, ...updates } : i));
-            upsertItem({ ...item, ...updates });
+            updateItemInDB(task.id, updates);
           }
         }
       } catch (err) {
         console.warn("Background AI metadata analysis failed", err);
         // Clear analyzing flag on error too
         setItems(prev => prev.map(i => i.id === task.id ? { ...i, isAnalyzing: false, model: 'Sony Camera' } : i));
+        updateItemInDB(task.id, { isAnalyzing: false, model: 'Sony Camera' });
       } finally {
         setVideoMetadataQueue(prev => prev.slice(1));
         setIsProcessingVideoQueue(false);
@@ -1042,6 +1046,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (needsAI) {
           if (rawMetadata && rawMetadata.length > 50) {
               setVideoMetadataQueue(prev => [...prev, { id, rawMetadata: rawMetadata!, useSmartSort, rootFolderId }]);
+          } else {
+              // Not enough metadata to analyze. Clear the flag immediately.
+              setItems(prev => prev.map(i => i.id === id ? { ...i, isAnalyzing: false } : i));
+              updateItemInDB(id, { isAnalyzing: false });
           }
       }
 
