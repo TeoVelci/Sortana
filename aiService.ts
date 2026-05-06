@@ -1235,7 +1235,7 @@ export const analyzeVideo = async (file: File): Promise<VideoAnalysisResult> => 
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
             model: 'gemini-3-flash-preview', // Stable model for video
-            contents: { parts: contentParts },
+            contents: contentParts,
             config: { responseMimeType: 'application/json' }
         }), 3, 'low'); // Video analysis is low priority background task
 
@@ -1298,7 +1298,7 @@ export const generateTagsForBatch = async (batch: BatchItem[]): Promise<AIAnalys
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
             model: 'gemini-3-flash-preview', // Faster model for basic vision
-            contents: { parts: parts },
+            contents: parts,
             config: {
                 responseMimeType: 'application/json',
                 // Using MimeType + Prompt instead of strict schema for better batch reliability
@@ -1335,12 +1335,10 @@ export const editImageWithAI = async (originalUrl: string, prompt: string): Prom
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
             model: 'gemini-2.5-flash-image', 
-            contents: {
-                parts: [
-                    { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
-                    { text: `Edit this image: ${prompt}` }
-                ]
-            }
+            contents: [
+                { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
+                { text: `Edit this image: ${prompt}` }
+            ]
         }), 3, 'high'); // Magic Edit is High Priority (User Waiting)
         let imageBase64: string | null = null;
         if (response.candidates && response.candidates[0].content.parts) {
