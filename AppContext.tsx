@@ -506,7 +506,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (!hasRehydrated.current || items.length === 0) return;
     
-    const stuckItems = items.filter(i => i.isAnalyzing && i.fileType === 'image' && !analysisQueue.some(q => q.id === i.id));
+    const stuckItems = items.filter(i => i.isAnalyzing && (i.fileType === 'image' || i.fileType === 'raw') && !analysisQueue.some(q => q.id === i.id));
     if (stuckItems.length > 0) {
         const newTasks: BatchItem[] = stuckItems.map(i => ({
             id: i.id,
@@ -593,7 +593,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const result = results.find(r => r.id === item.id);
             if (result) {
                 if (result.tags[0] === 'AI Error') {
-                     return { ...item, isAnalyzing: false, description: "AI Service Error. Please try again later." };
+                     const updated = { ...item, isAnalyzing: false, description: "AI Service Error. Please try again later." };
+                     updateItemInDB(updated.id, { isAnalyzing: false, description: updated.description });
+                     return updated;
                 }
                 const updated = {
                     ...item,
@@ -617,6 +619,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              
              if (retryCount > 3) {
                   setItems(prev => prev.map(i => validBatch.some(b => b.id === i.id) ? { ...i, description: "Skipped (Quota Limit)", isAnalyzing: false } : i));
+                  validBatch.forEach(b => updateItemInDB(b.id, { isAnalyzing: false, description: "Skipped (Quota Limit)" }));
                   setAnalysisQueue(prev => prev.slice(currentBatch.length));
              } else {
                  const updatedBatch = validBatch.map(b => ({ ...b, retryCount }));
@@ -772,6 +775,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } catch (error) {
           console.error("Video Analysis Failed", error);
           setItems(prev => prev.map(i => i.id === id ? { ...i, isAnalyzing: false } : i));
+          updateItemInDB(id, { isAnalyzing: false });
           throw error;
       }
   };
