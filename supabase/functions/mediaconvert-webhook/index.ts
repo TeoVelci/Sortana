@@ -60,8 +60,11 @@ serve(async (req) => {
     const proxyS3Key = pathParts[1]; 
     
     // The original file is in "uploads/". The proxy is in "proxies/". They share the same base timestamp-name
-    // proxyS3Key: "proxies/1777704108326-test-full.mp4"
-    const filenameWithoutExt = proxyS3Key.split('/').pop().split('.').slice(0, -1).join('.');
+    const filename = proxyS3Key.split('/').pop() || '';
+    
+    // The filename format is timestamp-originalName. We can reliably match on the timestamp.
+    // e.g. 1777704108326-test-full.mp4 -> 1777704108326
+    const timestamp = filename.split('-')[0];
 
     // Update Supabase
     const supabaseClient = createClient(
@@ -69,13 +72,13 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '' // We need service role key to bypass RLS for webhook
     );
 
-    console.log(`Looking for file matching: ${filenameWithoutExt} to set proxyS3Key: ${proxyS3Key}`);
+    console.log(`Looking for file matching timestamp: ${timestamp} to set proxyS3Key: ${proxyS3Key}`);
 
     // Fetch the matching item
     const { data: items, error: searchError } = await supabaseClient
       .from('items')
       .select('*')
-      .like('s3_key', `%${filenameWithoutExt}%`);
+      .like('s3_key', `%${timestamp}%`);
 
     if (searchError) {
         console.error("Search error:", searchError);
