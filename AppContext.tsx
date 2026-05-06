@@ -413,6 +413,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       itemChanged = true;
                       upsertItem(newItem);
                   }
+
+                  // 5. Fix leftover proxy descriptions
+                  if (newItem.fileType === 'video' && newItem.proxyS3Key && newItem.description === 'Generating proxy...') {
+                      newItem.description = '';
+                      newItem.isAnalyzing = false;
+                      itemChanged = true;
+                      upsertItem(newItem);
+                  }
               }
               
               if (itemChanged) hasUpdates = true;
@@ -617,7 +625,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const result = results.find(r => r.id === item.id);
             if (result) {
                 if (result.tags[0] === 'AI Error') {
-                     return { ...item, isAnalyzing: false, description: "AI Service Error. Please try again later." };
+                     const updated = { ...item, isAnalyzing: false, description: "AI Service Error. Please try again later." };
+                     upsertItem(updated);
+                     return updated;
                 }
                 const updated = {
                     ...item,
@@ -640,7 +650,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              console.warn(`Quota Hit. Retrying batch in 30s. Attempt: ${retryCount}`);
              
              if (retryCount > 3) {
-                  setItems(prev => prev.map(i => validBatch.some(b => b.id === i.id) ? { ...i, description: "Skipped (Quota Limit)", isAnalyzing: false } : i));
+                  setItems(prev => prev.map(i => {
+                      if (validBatch.some(b => b.id === i.id)) {
+                          const updated = { ...i, description: "Skipped (Quota Limit)", isAnalyzing: false };
+                          upsertItem(updated);
+                          return updated;
+                      }
+                      return i;
+                  }));
                   setAnalysisQueue(prev => prev.slice(currentBatch.length));
              } else {
                  const updatedBatch = validBatch.map(b => ({ ...b, retryCount }));
@@ -653,11 +670,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              }
          } else {
              console.error("Analysis Failed", e);
-             setItems(prev => prev.map(item => 
-                validBatch.some(b => b.id === item.id)
-                ? { ...item, isAnalyzing: false, description: "Analysis failed (Invalid format/size)." } 
-                : item
-             ));
+             setItems(prev => prev.map(item => {
+                 if (validBatch.some(b => b.id === item.id)) {
+                     const updated = { ...item, isAnalyzing: false, description: "Analysis failed (Invalid format/size)." };
+                     upsertItem(updated);
+                     return updated;
+                 }
+                 return item;
+             }));
              setAnalysisQueue(prev => prev.slice(currentBatch.length));
          }
       } finally {
