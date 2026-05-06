@@ -5,7 +5,7 @@ import { saveFileToDB, getFileFromDB, deleteFileFromDB } from './dbService';
 import { useAuth } from './AuthContext';
 import { supabase } from './supabaseClient';
 import { getPresignedUrl, uploadFileToS3, downloadFileFromS3 } from './storageService';
-import { fetchItems, upsertItem, updateItemInDB, deleteItemFromDB as deleteItemFromSupabase, fetchUserProfile } from './supabaseService';
+import { fetchItems, upsertItem, deleteItemFromDB as deleteItemFromSupabase, fetchUserProfile } from './supabaseService';
 
 // --- Types ---
 
@@ -226,7 +226,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (item.syncStatus === 'uploading') {
                     needsDbUpdate = true;
                     const updatedItem = { ...item, syncStatus: 'error' as const, description: 'Upload interrupted.' };
-                    updateItemInDB(item.id, { syncStatus: 'error', description: 'Upload interrupted.' }); // Persist the reset status
+                    upsertItem(updatedItem); // Persist the reset status
                     return updatedItem;
                 }
                 return item;
@@ -238,20 +238,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setItems([]);
     }
   }, [session]);
-
-  // Poll for updates if any item is generating a proxy
-  useEffect(() => {
-    const isGenerating = items.some(item => item.description === 'Generating proxy...');
-    if (!isGenerating || !session) return;
-
-    const intervalId = setInterval(() => {
-      fetchItems().then(fetchedItems => {
-        setItems(fetchedItems);
-      });
-    }, 5000); // Check every 5 seconds
-
-    return () => clearInterval(intervalId);
-  }, [items, session]);
 
   // File Cache now stores actual File objects, populated on upload or rehydration from DB
   const [fileCache, setFileCache] = useState<Map<string, File>>(new Map());
@@ -394,31 +380,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   }
 
                   // 3. Fix Stuck Analysis
+                  // We no longer mark them as complete here, but let the re-queue effect handle it
                   if (newItem.isAnalyzing && !newCache.has(newItem.id) && !newItem.s3Key) {
                       newItem.isAnalyzing = false;
                       if (!newItem.description) {
                           newItem.description = "Analysis skipped (file lost).";
                       }
                       itemChanged = true;
-                      updateItemInDB(newItem.id, { isAnalyzing: false, description: newItem.description });
-                  }
-
-                  // 4. Fix AI Error on videos from old bug
-                  if (newItem.fileType === 'video' && newItem.tags?.includes('AI Error')) {
-                      newItem.tags = newItem.tags.filter(t => t !== 'AI Error');
-                      if (newItem.description === "AI Service Error. Please try again later.") {
-                          newItem.description = "";
-                      }
-                      itemChanged = true;
-                      updateItemInDB(newItem.id, { tags: newItem.tags, description: newItem.description });
-                  }
-
-                  // 5. Fix leftover proxy descriptions
-                  if (newItem.fileType === 'video' && newItem.proxyS3Key && newItem.description === 'Generating proxy...') {
-                      newItem.description = '';
-                      newItem.isAnalyzing = false;
-                      itemChanged = true;
-                      updateItemInDB(newItem.id, { description: '', isAnalyzing: false });
+                      upsertItem(newItem);
                   }
               }
               
@@ -537,7 +506,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (!hasRehydrated.current || items.length === 0) return;
     
-    const stuckItems = items.filter(i => i.isAnalyzing && i.fileType !== 'video' && !analysisQueue.some(q => q.id === i.id));
+    const stuckItems = items.filter(i => i.isAnalyzing && !analysisQueue.some(q => q.id === i.id));
     if (stuckItems.length > 0) {
         const newTasks: BatchItem[] = stuckItems.map(i => ({
             id: i.id,
@@ -624,9 +593,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const result = results.find(r => r.id === item.id);
             if (result) {
                 if (result.tags[0] === 'AI Error') {
-                     const updated = { ...item, isAnalyzing: false, description: "AI Service Error. Please try again later." };
-                     updateItemInDB(updated.id, { isAnalyzing: false, description: "AI Service Error. Please try again later." });
-                     return updated;
+                     return { ...item, isAnalyzing: false, description: "AI Service Error. Please try again later." };
                 }
                 const updated = {
                     ...item,
@@ -635,7 +602,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     isAnalyzing: false
                 };
                 // PERSIST TO SUPABASE
-                updateItemInDB(updated.id, { tags: updated.tags, description: updated.description, isAnalyzing: false });
+                upsertItem(updated);
                 return updated;
             }
             return item;
@@ -649,14 +616,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              console.warn(`Quota Hit. Retrying batch in 30s. Attempt: ${retryCount}`);
              
              if (retryCount > 3) {
-                  setItems(prev => prev.map(i => {
-                      if (validBatch.some(b => b.id === i.id)) {
-                          const updated = { ...i, description: "Skipped (Quota Limit)", isAnalyzing: false };
-                          updateItemInDB(i.id, { description: "Skipped (Quota Limit)", isAnalyzing: false });
-                          return updated;
-                      }
-                      return i;
-                  }));
+                  setItems(prev => prev.map(i => validBatch.some(b => b.id === i.id) ? { ...i, description: "Skipped (Quota Limit)", isAnalyzing: false } : i));
                   setAnalysisQueue(prev => prev.slice(currentBatch.length));
              } else {
                  const updatedBatch = validBatch.map(b => ({ ...b, retryCount }));
@@ -669,14 +629,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              }
          } else {
              console.error("Analysis Failed", e);
-             setItems(prev => prev.map(item => {
-                 if (validBatch.some(b => b.id === item.id)) {
-                     const updated = { ...item, isAnalyzing: false, description: "Analysis failed (Invalid format/size)." };
-                     updateItemInDB(item.id, { isAnalyzing: false, description: "Analysis failed (Invalid format/size)." });
-                     return updated;
-                 }
-                 return item;
-             }));
+             setItems(prev => prev.map(item => 
+                validBatch.some(b => b.id === item.id)
+                ? { ...item, isAnalyzing: false, description: "Analysis failed (Invalid format/size)." } 
+                : item
+             ));
              setAnalysisQueue(prev => prev.slice(currentBatch.length));
          }
       } finally {
@@ -739,7 +696,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               const latestItems = prev.map(i => {
                 if (i.id === task.id) {
                   const updated = { ...i, ...updates };
-                  updateItemInDB(task.id, updates);
+                  upsertItem(updated);
                   return updated;
                 }
                 return i;
@@ -753,15 +710,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (item) {
             const updates = { model: 'Sony Camera', isAnalyzing: false };
             setItems(prev => prev.map(i => i.id === task.id ? { ...i, ...updates } : i));
-            updateItemInDB(task.id, updates);
+            upsertItem({ ...item, ...updates });
           }
         }
       } catch (err) {
         console.warn("Background AI metadata analysis failed", err);
         // Clear analyzing flag on error too
-        const updates = { isAnalyzing: false, model: 'Sony Camera' };
-        setItems(prev => prev.map(i => i.id === task.id ? { ...i, ...updates } : i));
-        updateItemInDB(task.id, updates);
+        setItems(prev => prev.map(i => i.id === task.id ? { ...i, isAnalyzing: false, model: 'Sony Camera' } : i));
       } finally {
         setVideoMetadataQueue(prev => prev.slice(1));
         setIsProcessingVideoQueue(false);
@@ -805,7 +760,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       },
                       isAnalyzing: false
                   };
-                  updateItemInDB(id, { name: updated.name, description: updated.description, tags: updated.tags, videoMetadata: updated.videoMetadata, isAnalyzing: false });
+                  upsertItem(updated);
                   return updated;
               }
               return i;
@@ -814,6 +769,78 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           console.error("Video Analysis Failed", error);
           setItems(prev => prev.map(i => i.id === id ? { ...i, isAnalyzing: false } : i));
           throw error;
+      }
+  };
+
+  const generateVideoProxy = async (id: string, s3KeyOverride?: string) => {
+      const item = items.find(i => i.id === id);
+      const key = s3KeyOverride || item?.s3Key;
+      if (!item || !key || item.proxyS3Key) return;
+
+      setItems(prev => prev.map(i => i.id === id ? { ...i, description: 'Generating proxy...' } : i));
+
+      try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 330000); // 5.5 minute timeout
+
+          // For Netlify/serverless deployment, we skip backend proxy generation
+          // as it requires a dedicated server with FFmpeg.
+          // Instead, we just use the original video file.
+          setItems(prev => prev.map(i => i.id === id ? { 
+              ...i, 
+              proxyS3Key: key, 
+              description: 'Using original source.', 
+              syncStatus: 'synced' 
+          } : i));
+          
+          upsertItem({ 
+              ...item, 
+              proxyS3Key: key, 
+              description: 'Using original source.', 
+              syncStatus: 'synced' 
+          });
+          return;
+
+      /* RESTORE THIS IF YOU DEPLOY TO A SERVER WITH FFMPEG
+          const response = await fetch('/api/generate-proxy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key }),
+              signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+              throw new Error(`Proxy generation failed with status ${response.status}`);
+          }
+
+          const data = await response.json();
+          if (data.proxyKey) {
+              setItems(prev => prev.map(i => {
+                  if (i.id === id) {
+                      const updated = { ...i, proxyS3Key: data.proxyKey, description: i.description?.replace('Generating proxy...', '') || '' };
+                      upsertItem(updated);
+                      return updated;
+                  }
+                  return i;
+              }));
+          }
+          */
+      } catch (e: any) {
+          console.error("Proxy generation failed", e);
+          const errorMsg = e.name === 'AbortError' ? 'Proxy timed out.' : 'Proxy failed.';
+          setItems(prev => {
+              const latestItems = prev.map(i => {
+                  if (i.id === id) {
+                      const updated = { ...i, description: errorMsg, syncStatus: 'error' as any };
+                      upsertItem(updated); // Persist error so UI can show retry state
+                      return updated;
+                  }
+                  return i;
+              });
+              return latestItems;
+          });
       }
   };
 
@@ -1022,6 +1049,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         imagesToQueue.push({ file: f, id, previewBlob, retryCount: 0 });
       }
 
+      if (fType === 'video') {
+          // generateVideoProxy(id); // REMOVED: Call it after upload instead
+      }
+
       // Define the upload task for this file
       uploadTasks.push(async () => {
           try {
@@ -1050,30 +1081,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   }
               }
 
-              const videoDescription = fType === 'video' ? 'Generating proxy...' : undefined;
-
               setItems(prev => prev.map(i => i.id === id ? { 
                   ...i, 
                   syncStatus: 'synced', 
                   s3Key: key, 
                   previewUrl: finalPreviewUrl,
-                  thumbnailUrl: finalThumbnailUrl,
-                  description: videoDescription || i.description
+                  thumbnailUrl: finalThumbnailUrl
               } : i));
               
-              updateItemInDB(id, { 
+              upsertItem({ 
+                  ...newItem, 
                   syncStatus: 'synced', 
                   s3Key: key, 
                   previewUrl: finalPreviewUrl,
-                  thumbnailUrl: finalThumbnailUrl,
-                  description: videoDescription || newItem.description
+                  thumbnailUrl: finalThumbnailUrl
               });
+
+              // TRIGGER PROXY GENERATION AFTER UPLOAD SUCCESS
+              if (fType === 'video') {
+                  // On serverless, we don't call generateVideoProxy, 
+                  // just mark as finished using the original file as proxy.
+                  setItems(prev => prev.map(i => i.id === id ? { 
+                      ...i, 
+                      proxyS3Key: key, 
+                      description: 'Using original source.',
+                      syncStatus: 'synced' 
+                  } : i));
+                  
+                  upsertItem({ 
+                      ...newItem, 
+                      s3Key: key, 
+                      proxyS3Key: key, 
+                      syncStatus: 'synced', 
+                      description: 'Using original source.',
+                      previewUrl: finalPreviewUrl,
+                      thumbnailUrl: finalThumbnailUrl
+                  });
+              }
           } catch (error: any) {
               console.error(`Upload failed for ${f.name}`, error);
               const errorMsg = error.message || 'Unknown error';
               showToast(`Failed to upload ${f.name}: ${errorMsg}`, 'error');
               setItems(prev => prev.map(i => i.id === id ? { ...i, syncStatus: 'error', description: `Upload failed: ${errorMsg}` } : i));
-              updateItemInDB(id, { syncStatus: 'error', description: `Upload failed: ${errorMsg}` });
+              upsertItem({ ...newItem, syncStatus: 'error', description: `Upload failed: ${errorMsg}` });
           }
       });
     }
@@ -1192,20 +1242,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!item) return;
     const oldName = item.name;
 
-    setItems(prev => prev.map(i => i.id === id ? { ...i, name: newName } : i));
-    updateItemInDB(id, { name: newName });
+    setItems(prev => prev.map(item => item.id === id ? { ...item, name: newName } : item));
+    upsertItem({ ...item, name: newName });
 
     setRecentActivity(prev => prev.map(a => a.projectId === id ? { ...a, projectName: newName } : a));
 
     addToHistory({
-        description: `Rename '${oldName}' to '${newName}'`,
+        description: `Rename ${oldName} to ${newName}`,
         undo: () => {
-            setItems(prev => prev.map(i => i.id === id ? { ...i, name: oldName } : i));
-            updateItemInDB(id, { name: oldName });
+            setItems(prev => prev.map(item => item.id === id ? { ...item, name: oldName } : item));
+            upsertItem({ ...item, name: oldName });
         },
         redo: () => {
-            setItems(prev => prev.map(i => i.id === id ? { ...i, name: newName } : i));
-            updateItemInDB(id, { name: newName });
+            setItems(prev => prev.map(item => item.id === id ? { ...item, name: newName } : item));
+            upsertItem({ ...item, name: newName });
         }
     });
   };
@@ -1279,7 +1329,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setItems(prev => prev.map(i => {
           if (targetIds.has(i.id)) {
               const updated = { ...i, ...updates };
-              updateItemInDB(i.id, updates); // Persist
+              upsertItem(updated); // Persist
               return updated;
           }
           return i;
@@ -1291,7 +1341,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                setItems(prev => prev.map(i => {
                    const original = originalItems.find(o => o.id === i.id);
                    if (original) {
-                       updateItemInDB(original.id, original); // Revert persist
+                       upsertItem(original); // Revert persist
                        return original;
                    }
                    return i;
@@ -1301,7 +1351,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                setItems(prev => prev.map(i => {
                    if (targetIds.has(i.id)) {
                        const updated = { ...i, ...updates };
-                       updateItemInDB(i.id, updates);
+                       upsertItem(updated);
                        return updated;
                    }
                    return i;
@@ -1317,7 +1367,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (targetIds.has(i.id)) {
               const newTags = Array.from(new Set([...(i.tags || []), tag]));
               const updated = { ...i, tags: newTags };
-              updateItemInDB(i.id, { tags: newTags }); // Persist ONLY the fields updated
+              upsertItem(updated); // Persist
               return updated;
           }
           return i;
@@ -1329,7 +1379,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setItems(prev => prev.map(i => {
                   if (targetIds.has(i.id) && i.tags) {
                       const updated = { ...i, tags: i.tags.filter(t => t !== tag) };
-                      updateItemInDB(i.id, { tags: updated.tags });
+                      upsertItem(updated);
                       return updated;
                   }
                   return i;
@@ -1340,7 +1390,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   if (targetIds.has(i.id)) {
                       const newTags = Array.from(new Set([...(i.tags || []), tag]));
                       const updated = { ...i, tags: newTags };
-                      updateItemInDB(i.id, { tags: newTags });
+                      upsertItem(updated);
                       return updated;
                   }
                   return i;
@@ -1348,28 +1398,51 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
       });
   };
-
   const retryUpload = async (id: string) => {
       const item = items.find(i => i.id === id);
-      if (!item || !item.s3Key) return;
-      
+      if (!item) return;
+
+      const file = fileCache.get(id);
+      if (!file) {
+          showToast("Original file is no longer in memory. Please delete this item and select the file again.", "error");
+          return;
+      }
+
+      // Mark as uploading
+      setItems(prev => prev.map(i => i.id === id ? { ...i, syncStatus: 'uploading', description: 'Retrying upload...' } : i));
+
       try {
-          // In a real app, you'd need the File object again, or you'd just clear the error and let them retry drag-and-drop
-          const finalUpdates = { syncStatus: 'synced' as const, description: '' };
+          // Re-attempt S3 upload
+          const { url, key } = await getPresignedUrl(file.name, file.type);
+          await uploadFileToS3(file, url);
+          
+          const finalUpdates: Partial<FileSystemItem> = {
+              s3Key: key,
+              syncStatus: 'synced',
+              description: item.fileType === 'video' ? 'Using original source.' : ''
+          };
+          
+          if (item.fileType === 'video') {
+              finalUpdates.proxyS3Key = key;
+          }
+
           setItems(prev => prev.map(i => i.id === id ? { ...i, ...finalUpdates } : i));
-          updateItemInDB(id, finalUpdates);
-      } catch (e) {
-          const errUpdates = { syncStatus: 'error' as const, description: 'Upload failed.' };
-          setItems(prev => prev.map(i => i.id === id ? { ...i, ...errUpdates } : i));
-          updateItemInDB(id, errUpdates);
+          upsertItem({ ...item, ...finalUpdates });
+          showToast("Upload retry successful!", "success");
+      } catch (error) {
+          console.error("Retry failed:", error);
+          setItems(prev => prev.map(i => i.id === id ? { ...i, syncStatus: 'error', description: 'Upload failed.' } : i));
+          upsertItem({ ...item, syncStatus: 'error', description: 'Upload failed.' });
       }
   };
 
   const executeOrganizationPlan = (plan: FolderPlan[], targetParentId: string | null = null) => {
+      const newItems = [...items];
+      
       const processPlan = (plans: FolderPlan[], parentId: string | null) => {
           plans.forEach(p => {
               const folderId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-              const folder: FileSystemItem = {
+              newItems.push({
                   id: folderId,
                   name: p.folderName,
                   type: 'folder',
@@ -1377,20 +1450,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   size: 0,
                   dateAdded: Date.now(),
                   syncStatus: 'synced'
-              };
-              setItems(prev => [...prev, folder]);
-              upsertItem(folder); // Persist Folder
+              });
+              upsertItem(newItems[newItems.length - 1]); // Persist Folder
               
-              setItems(prev => {
-                  const newItems = [...prev];
-                  p.fileIds.forEach(fileId => {
-                      const idx = newItems.findIndex(i => i.id === fileId);
-                      if (idx !== -1) {
-                          newItems[idx] = { ...newItems[idx], parentId: folderId };
-                          updateItemInDB(fileId, { parentId: folderId }); // Persist File Move
-                      }
-                  });
-                  return newItems;
+              p.fileIds.forEach(fid => {
+                  const idx = newItems.findIndex(x => x.id === fid);
+                  if (idx !== -1) {
+                      newItems[idx] = { ...newItems[idx], parentId: folderId };
+                      upsertItem(newItems[idx]); // Persist File Move
+                  }
               });
               
               if (p.subfolders) {
@@ -1400,6 +1468,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
       
       processPlan(plan, targetParentId);
+      setItems(newItems);
   };
 
   const setViewState = (updates: Partial<ViewState>) => {
@@ -1436,6 +1505,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updateItemMetadata,
       executeOrganizationPlan,
       analyzeVideoItem,
+      generateVideoProxy,
       setViewState,
       resetFilters,
       bulkDeleteItems,
