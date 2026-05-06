@@ -50,9 +50,12 @@ export const fetchItems = async (): Promise<FileSystemItem[]> => {
 };
 
 export const upsertItem = async (item: FileSystemItem) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id || (await supabase.auth.getUser()).data.user?.id;
+
   const dbItem = {
     id: item.id,
-    user_id: (await supabase.auth.getUser()).data.user?.id,
+    user_id: userId,
     name: item.name,
     type: item.type,
     file_type: item.fileType,
