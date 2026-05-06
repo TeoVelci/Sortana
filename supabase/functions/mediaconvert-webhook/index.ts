@@ -62,9 +62,15 @@ serve(async (req) => {
     // The original file is in "uploads/". The proxy is in "proxies/". They share the same base timestamp-name
     const filename = proxyS3Key.split('/').pop() || '';
     
-    // The filename format is timestamp-originalName. We can reliably match on the timestamp.
-    // e.g. 1777704108326-test-full.mp4 -> 1777704108326
-    const timestamp = filename.split('-')[0];
+    // AWS MediaConvert Lambda appends its own timestamp: e.g. 1778044816711-C0260.mp4
+    const parts = filename.split('-');
+    
+    // The original filename is everything after the first dash
+    let originalName = parts.slice(1).join('-'); // e.g. "C0260.mp4"
+    
+    // Extract the base name without extension because AWS forces lowercase .mp4
+    const lastDotIndex = originalName.lastIndexOf('.');
+    const baseName = lastDotIndex !== -1 ? originalName.substring(0, lastDotIndex) : originalName;
 
     // Update Supabase
     const supabaseClient = createClient(
@@ -72,13 +78,15 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '' // We need service role key to bypass RLS for webhook
     );
 
-    console.log(`Looking for file matching timestamp: ${timestamp} to set proxyS3Key: ${proxyS3Key}`);
+    console.log(`Looking for file matching baseName: ${baseName} to set proxyS3Key: ${proxyS3Key}`);
 
-    // Fetch the matching item
+    // Fetch the matching item. Order by date_added desc to get the most recent upload
     const { data: items, error: searchError } = await supabaseClient
       .from('items')
       .select('*')
-      .like('s3_key', `%${timestamp}%`);
+      .ilike('s3_key', `%${baseName}%`)
+      .order('date_added', { ascending: false })
+      .limit(1);
 
     if (searchError) {
         console.error("Search error:", searchError);
@@ -86,7 +94,7 @@ serve(async (req) => {
     }
 
     if (!items || items.length === 0) {
-        console.log("No matching file found in database for", filenameWithoutExt);
+        console.log(`No matching file found in database for baseName: ${baseName}`);
         return new Response(JSON.stringify({ message: "No matching file found" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,

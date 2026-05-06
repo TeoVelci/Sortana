@@ -4,6 +4,12 @@ import { FileSystemItem, User } from './AppContext';
 
 // --- ITEMS (Files/Folders) ---
 
+const safeISODate = (dateStr: string | number | undefined | null): string | null => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+};
+
 export const fetchItems = async (): Promise<FileSystemItem[]> => {
   const { data, error } = await supabase
     .from('items')
@@ -62,7 +68,7 @@ export const upsertItem = async (item: FileSystemItem) => {
     height: item.height,
     make: item.make,
     model: item.model,
-    date_taken: item.dateTaken ? new Date(item.dateTaken).toISOString() : null,
+    date_taken: safeISODate(item.dateTaken),
     sync_status: item.syncStatus,
     video_metadata: item.videoMetadata,
     proxy_s3_key: item.proxyS3Key,
@@ -96,7 +102,7 @@ export const updateItemInDB = async (id: string, updates: Partial<FileSystemItem
   if (updates.height !== undefined) dbUpdates.height = updates.height;
   if (updates.make !== undefined) dbUpdates.make = updates.make;
   if (updates.model !== undefined) dbUpdates.model = updates.model;
-  if (updates.dateTaken !== undefined) dbUpdates.date_taken = updates.dateTaken ? new Date(updates.dateTaken).toISOString() : null;
+  if (updates.dateTaken !== undefined) dbUpdates.date_taken = safeISODate(updates.dateTaken);
   if (updates.syncStatus !== undefined) dbUpdates.sync_status = updates.syncStatus;
   if (updates.videoMetadata !== undefined) dbUpdates.video_metadata = updates.videoMetadata;
   if (updates.proxyS3Key !== undefined) dbUpdates.proxy_s3_key = updates.proxyS3Key;
