@@ -592,14 +592,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setItems(prev => prev.map(item => {
             const result = results.find(r => r.id === item.id);
             if (result) {
-                if (result.tags[0] === 'AI Error') {
+                if (result.tags && result.tags[0] === 'AI Error') {
                      const updated = { ...item, isAnalyzing: false, description: "AI Service Error. Please try again later." };
                      updateItemInDB(updated.id, { isAnalyzing: false, description: updated.description });
                      return updated;
                 }
                 const updated = {
                     ...item,
-                    tags: [...(item.tags || []), ...result.tags],
+                    tags: [...(item.tags || []), ...(result.tags || [])],
                     description: result.description,
                     isAnalyzing: false
                 };
