@@ -403,6 +403,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       itemChanged = true;
                       upsertItem(newItem);
                   }
+
+                  // 4. Fix AI Error on videos from old bug
+                  if (newItem.fileType === 'video' && newItem.tags?.includes('AI Error')) {
+                      newItem.tags = newItem.tags.filter(t => t !== 'AI Error');
+                      if (newItem.description === "AI Service Error. Please try again later.") {
+                          newItem.description = "";
+                      }
+                      itemChanged = true;
+                      upsertItem(newItem);
+                  }
               }
               
               if (itemChanged) hasUpdates = true;
@@ -520,7 +530,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (!hasRehydrated.current || items.length === 0) return;
     
-    const stuckItems = items.filter(i => i.isAnalyzing && !analysisQueue.some(q => q.id === i.id));
+    const stuckItems = items.filter(i => i.isAnalyzing && i.fileType !== 'video' && !analysisQueue.some(q => q.id === i.id));
     if (stuckItems.length > 0) {
         const newTasks: BatchItem[] = stuckItems.map(i => ({
             id: i.id,
