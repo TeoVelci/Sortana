@@ -797,7 +797,7 @@ export const analyzeVideoMetadata = async (rawMetadata: string): Promise<{ make:
     try {
         const ai = getAI();
         const response = await ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: `Analyze the following raw video file metadata and extract the camera make and model. 
             
             CRITICAL INSTRUCTIONS:
@@ -1234,7 +1234,7 @@ export const analyzeVideo = async (file: File): Promise<VideoAnalysisResult> => 
         // Dynamic Client Instantiation
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
-            model: 'gemini-2.0-flash', // Stable model for video
+            model: 'gemini-2.5-flash', // Stable model for video
             contents: contentParts,
             config: { responseMimeType: 'application/json' }
         }), 3, 'low'); // Video analysis is low priority background task
@@ -1297,7 +1297,7 @@ export const generateTagsForBatch = async (batch: BatchItem[]): Promise<AIAnalys
         // Dynamic Client Instantiation
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
-            model: 'gemini-2.0-flash', // Faster model for basic vision
+            model: 'gemini-2.5-flash', // Faster model for basic vision
             contents: parts,
             config: {
                 responseMimeType: 'application/json',
@@ -1340,7 +1340,7 @@ export const editImageWithAI = async (originalUrl: string, prompt: string): Prom
         const base64Data = await blobUrlToBase64(originalUrl);
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
-            model: 'gemini-2.0-flash', 
+            model: 'gemini-2.5-flash', 
             contents: [
                 { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
                 { text: `Edit this image: ${prompt}` }
@@ -1410,7 +1410,7 @@ export const proposeOrganization = async (files: FileManifest[], strategy: Organ
     try {
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: prompt,
             config: { 
                 responseMimeType: 'application/json', 
@@ -1443,7 +1443,7 @@ export const copilotTools = [setFiltersTool, createFolderTool, listProjectsTool,
 export const initializeCopilotChat = (): Chat => {
     const ai = getAI();
     return ai.chats.create({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         config: {
             systemInstruction: `You are Sortana Copilot.`,
             tools: [{ functionDeclarations: copilotTools }]
