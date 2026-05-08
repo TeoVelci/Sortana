@@ -1301,18 +1301,35 @@ export const generateTagsForBatch = async (batch: BatchItem[]): Promise<AIAnalys
             contents: parts,
             config: {
                 responseMimeType: 'application/json',
-                // Using MimeType + Prompt instead of strict schema for better batch reliability
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            id: { type: Type.STRING },
+                            tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            description: { type: Type.STRING }
+                        },
+                        required: ["id", "tags", "description"]
+                    }
+                }
             }
         }), 3, 'low'); // Image Tagging is Low Priority
 
         if (response.text) {
             const results = parseJSONResponse(response.text);
             if (Array.isArray(results)) {
-                return results.map(r => ({
-                    id: r?.id ? String(r.id) : 'unknown',
-                    tags: Array.isArray(r?.tags) ? r.tags.filter((t: any) => t != null).map(String) : [],
-                    description: r?.description ? String(r.description) : ''
-                }));
+                return results.map((r, index) => {
+                    // Fallback to index if ID is hallucinated or missing
+                    const originalImage = validImages[index];
+                    const matchedImage = validImages.find(img => img.id === r?.id) || originalImage;
+                    
+                    return {
+                        id: matchedImage?.id ? String(matchedImage.id) : 'unknown',
+                        tags: Array.isArray(r?.tags) ? r.tags.filter((t: any) => t != null).map(String) : [],
+                        description: r?.description ? String(r.description) : ''
+                    };
+                });
             }
         }
         throw new Error("Invalid response format");
