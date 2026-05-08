@@ -774,8 +774,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               }
               return i;
           }));
-      } catch (error) {
+      } catch (error: any) {
           console.error("Video Analysis Failed", error);
+          showToast(`AI Video Error: ${error?.message || String(error)}`, "error");
           bulkUpdateMetadata([id], { isAnalyzing: false });
           throw error;
       }
