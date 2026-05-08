@@ -3,9 +3,17 @@ import { GoogleGenAI, FunctionDeclaration, Type, Chat } from "@google/genai";
 
 // Helper to get fresh client instance (ensures API key is current)
 const getAI = () => {
-    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    // Check process.env (injected by Vite define) AND import.meta.env directly
+    const apiKey = 
+        (typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY) ||
+        (typeof process !== 'undefined' && process.env && process.env.API_KEY) ||
+        import.meta.env.VITE_GEMINI_API_KEY ||
+        import.meta.env.VITE_API_KEY ||
+        import.meta.env.GEMINI_API_KEY ||
+        import.meta.env.API_KEY;
+
     if (!apiKey) {
-        console.error("Gemini API Key is missing! Please ensure GEMINI_API_KEY is set in the environment.");
+        console.error("Gemini API Key is missing! Please ensure GEMINI_API_KEY or VITE_GEMINI_API_KEY is set in the environment.");
     }
     return new GoogleGenAI({ apiKey: apiKey || "" });
 };
@@ -1260,7 +1268,14 @@ export const analyzeVideo = async (file: File): Promise<VideoAnalysisResult> => 
  */
 export const generateTagsForBatch = async (batch: BatchItem[]): Promise<AIAnalysisResult[]> => {
     try {
-        const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+        const apiKey = 
+            (typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY) ||
+            (typeof process !== 'undefined' && process.env && process.env.API_KEY) ||
+            import.meta.env.VITE_GEMINI_API_KEY ||
+            import.meta.env.VITE_API_KEY ||
+            import.meta.env.GEMINI_API_KEY ||
+            import.meta.env.API_KEY;
+
         if (!apiKey) throw new Error("API Key missing");
         if (batch.length === 0) return [];
 
@@ -1381,7 +1396,14 @@ export const editImageWithAI = async (originalUrl: string, prompt: string): Prom
 };
 
 export const proposeOrganization = async (files: FileManifest[], strategy: OrganizationStrategy = 'smart_event'): Promise<FolderPlan[]> => {
-    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    const apiKey = 
+        (typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY) ||
+        (typeof process !== 'undefined' && process.env && process.env.API_KEY) ||
+        import.meta.env.VITE_GEMINI_API_KEY ||
+        import.meta.env.VITE_API_KEY ||
+        import.meta.env.GEMINI_API_KEY ||
+        import.meta.env.API_KEY;
+
     if (!apiKey) throw new Error("API Key missing");
     if (files.length === 0) return [];
 
