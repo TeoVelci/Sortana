@@ -1227,8 +1227,6 @@ const parseJSONResponse = (text: string) => {
 
 export const analyzeVideo = async (file: File): Promise<VideoAnalysisResult> => {
     try {
-        const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-        if (!apiKey) throw new Error("API Key missing");
         const frames = await extractVideoFrames(file);
         if (frames.length === 0) throw new Error("Could not extract frames from video");
 
@@ -1269,14 +1267,6 @@ export const analyzeVideo = async (file: File): Promise<VideoAnalysisResult> => 
  */
 export const generateTagsForBatch = async (batch: BatchItem[]): Promise<AIAnalysisResult[]> => {
     try {
-        const apiKey = 
-            (typeof __GEMINI_API_KEY__ !== 'undefined' && __GEMINI_API_KEY__) ||
-            import.meta.env.VITE_GEMINI_API_KEY ||
-            import.meta.env.VITE_API_KEY ||
-            import.meta.env.GEMINI_API_KEY ||
-            import.meta.env.API_KEY;
-
-        if (!apiKey) throw new Error("API Key missing");
         if (batch.length === 0) return [];
 
         const processedImages = await Promise.all(batch.map(async (item) => {
@@ -1367,14 +1357,6 @@ export const generateImageTags = async (file: File, previewBlob?: Blob): Promise
 
 export const editImageWithAI = async (originalUrl: string, prompt: string): Promise<string> => {
     try {
-        const apiKey = 
-            (typeof __GEMINI_API_KEY__ !== 'undefined' && __GEMINI_API_KEY__) ||
-            import.meta.env.VITE_GEMINI_API_KEY ||
-            import.meta.env.VITE_API_KEY ||
-            import.meta.env.GEMINI_API_KEY ||
-            import.meta.env.API_KEY ||
-            atob('QUl6YVN5Q2lBVXI1cTVQQXJhU0VobXB3R2tGWEJSNXUzOHFpRmdv'); // Base64 encoded to bypass Netlify static secret scanner
-        if (!apiKey) throw new Error("API Key missing");
         const base64Data = await blobUrlToBase64(originalUrl);
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
@@ -1402,15 +1384,6 @@ export const editImageWithAI = async (originalUrl: string, prompt: string): Prom
 };
 
 export const proposeOrganization = async (files: FileManifest[], strategy: OrganizationStrategy = 'smart_event'): Promise<FolderPlan[]> => {
-    const apiKey = 
-        (typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY) ||
-        (typeof process !== 'undefined' && process.env && process.env.API_KEY) ||
-        import.meta.env.VITE_GEMINI_API_KEY ||
-        import.meta.env.VITE_API_KEY ||
-        import.meta.env.GEMINI_API_KEY ||
-        import.meta.env.API_KEY;
-
-    if (!apiKey) throw new Error("API Key missing");
     if (files.length === 0) return [];
 
     const fileList = files.map(f => ({
