@@ -1295,8 +1295,12 @@ export const generateTagsForBatch = async (batch: BatchItem[]): Promise<AIAnalys
         });
 
         parts.push({ 
-            text: `Analyze these ${validImages.length} images. Return a JSON ARRAY of objects. Schema:
-            { "id": "string", "tags": ["tag1", "tag2"], "description": "concise summary" }` 
+            text: `Analyze these ${validImages.length} images. Return a JSON ARRAY of objects. 
+For each image:
+1. Generate a highly descriptive, concise summary for the 'description'.
+2. Generate a comprehensive array of 10-20 'tags'. These tags should aggressively identify all objects, activities, concepts, context, setting, colors, and any discernible camera metadata.
+Schema:
+{ "id": "string", "tags": ["tag1", "tag2", "tag3"], "description": "concise summary" }` 
         });
 
         // Dynamic Client Instantiation

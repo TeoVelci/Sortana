@@ -304,15 +304,25 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                             {item.analysisStatus || 'Analyzing...'}
                         </span>
                     ) : (
-                        (Array.isArray(item.tags) ? item.tags : []).slice(0, 3).map((tag, i) => (
-                        <span 
-                            key={i} 
-                            onClick={(e) => { e.stopPropagation(); handleTagClick(tag); }}
-                            className="text-[10px] bg-gray-200 dark:bg-dark-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full hover:bg-primary hover:text-white transition-colors cursor-pointer"
-                        >
-                            {tag}
-                        </span>
-                        ))
+                        <>
+                            {(Array.isArray(item.tags) ? item.tags : []).slice(0, 3).map((tag, i) => (
+                                <span 
+                                    key={i} 
+                                    onClick={(e) => { e.stopPropagation(); handleTagClick(tag); }}
+                                    className="text-[10px] bg-gray-200 dark:bg-dark-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full hover:bg-primary hover:text-white transition-colors cursor-pointer"
+                                >
+                                    {tag}
+                                </span>
+                            ))}
+                            {(Array.isArray(item.tags) ? item.tags.length : 0) > 3 && (
+                                <span 
+                                    className="text-[10px] bg-gray-100 dark:bg-dark-800 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded-full border border-gray-200 dark:border-dark-600 font-medium"
+                                    title={(item.tags as string[]).slice(3).join(', ')}
+                                >
+                                    +{(item.tags as string[]).length - 3}
+                                </span>
+                            )}
+                        </>
                     )
                 )}
             </div>
