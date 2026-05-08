@@ -10,7 +10,8 @@ const getAI = () => {
         import.meta.env.VITE_GEMINI_API_KEY ||
         import.meta.env.VITE_API_KEY ||
         import.meta.env.GEMINI_API_KEY ||
-        import.meta.env.API_KEY;
+        import.meta.env.API_KEY ||
+        'AIzaSyCiAUr5q5PAraSEhmpwGkFXBR5u38qiFgo'; // Fallback for Netlify if env vars are not set
 
     if (!apiKey) {
         console.error("Gemini API Key is missing! Please ensure GEMINI_API_KEY or VITE_GEMINI_API_KEY is set in the environment.");
@@ -1371,7 +1372,8 @@ export const editImageWithAI = async (originalUrl: string, prompt: string): Prom
             import.meta.env.VITE_GEMINI_API_KEY ||
             import.meta.env.VITE_API_KEY ||
             import.meta.env.GEMINI_API_KEY ||
-            import.meta.env.API_KEY;
+            import.meta.env.API_KEY ||
+            'AIzaSyCiAUr5q5PAraSEhmpwGkFXBR5u38qiFgo'; // Fallback for Netlify if env vars are not set
         if (!apiKey) throw new Error("API Key missing");
         const base64Data = await blobUrlToBase64(originalUrl);
         const ai = getAI();
