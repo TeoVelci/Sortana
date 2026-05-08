@@ -10,8 +10,7 @@ const getAI = () => {
         import.meta.env.VITE_GEMINI_API_KEY ||
         import.meta.env.VITE_API_KEY ||
         import.meta.env.GEMINI_API_KEY ||
-        import.meta.env.API_KEY ||
-        atob('QUl6YVN5Q2lBVXI1cTVQQXJhU0VobXB3R2tGWEJSNXUzOHFpRmdv'); // Base64 encoded to bypass Netlify static secret scanner
+        import.meta.env.API_KEY;
 
     if (!apiKey) {
         console.error("Gemini API Key is missing! Please ensure GEMINI_API_KEY or VITE_GEMINI_API_KEY is set in the environment.");
