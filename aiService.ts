@@ -1234,7 +1234,16 @@ export const analyzeVideo = async (file: File): Promise<VideoAnalysisResult> => 
         }));
 
         contentParts.push({
-            text: `Here are frames from a video clip. Return JSON with title, summary, tags, and moments.`
+            text: `Here are frames extracted from a video clip. Return a JSON object representing your analysis.
+Schema requirement:
+{
+  "title": "A short, descriptive title",
+  "summary": "A concise summary of the video content",
+  "tags": ["tag1", "tag2"], 
+  "moments": [{ "timestamp": "00:00", "description": "Key event" }]
+}
+IMPORTANT:
+- "tags": Generate a comprehensive array of 10-20 tags. These tags should aggressively identify all objects, activities, concepts, context, setting, and colors visible across the video frames.`
         });
 
         // Dynamic Client Instantiation
