@@ -599,7 +599,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }
                 const updated = {
                     ...item,
-                    tags: [...(item.tags || []), ...(result.tags || [])],
+                    tags: [...(Array.isArray(item.tags) ? item.tags : []), ...(Array.isArray(result.tags) ? result.tags : [])],
                     description: result.description,
                     isAnalyzing: false
                 };
@@ -759,7 +759,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       ...i,
                       name: result.title || i.name,
                       description: result.summary,
-                      tags: [...(i.tags || []), ...result.tags],
+                      tags: [...(Array.isArray(i.tags) ? i.tags : []), ...(Array.isArray(result.tags) ? result.tags : [])],
                       videoMetadata: {
                           title: result.title,
                           summary: result.summary,
@@ -1377,7 +1377,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       
       setItems(prev => prev.map(i => {
           if (targetIds.has(i.id)) {
-              const newTags = Array.from(new Set([...(i.tags || []), tag]));
+              const newTags = Array.from(new Set([...(Array.isArray(i.tags) ? i.tags : []), tag]));
               const updated = { ...i, tags: newTags };
               upsertItem(updated); // Persist
               return updated;
@@ -1390,7 +1390,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           undo: () => {
               setItems(prev => prev.map(i => {
                   if (targetIds.has(i.id) && i.tags) {
-                      const updated = { ...i, tags: i.tags.filter(t => t !== tag) };
+                      const updated = { ...i, tags: Array.isArray(i.tags) ? i.tags.filter((t: any) => t !== tag) : [] };
                       upsertItem(updated);
                       return updated;
                   }
@@ -1400,7 +1400,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           redo: () => {
                setItems(prev => prev.map(i => {
                   if (targetIds.has(i.id)) {
-                      const newTags = Array.from(new Set([...(i.tags || []), tag]));
+                      const newTags = Array.from(new Set([...(Array.isArray(i.tags) ? i.tags : []), tag]));
                       const updated = { ...i, tags: newTags };
                       upsertItem(updated);
                       return updated;

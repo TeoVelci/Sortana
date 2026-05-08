@@ -1307,7 +1307,13 @@ export const generateTagsForBatch = async (batch: BatchItem[]): Promise<AIAnalys
 
         if (response.text) {
             const results = parseJSONResponse(response.text);
-            if (Array.isArray(results)) return results;
+            if (Array.isArray(results)) {
+                return results.map(r => ({
+                    id: r?.id ? String(r.id) : 'unknown',
+                    tags: Array.isArray(r?.tags) ? r.tags.filter((t: any) => t != null).map(String) : [],
+                    description: r?.description ? String(r.description) : ''
+                }));
+            }
         }
         throw new Error("Invalid response format");
 

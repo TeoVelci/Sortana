@@ -304,7 +304,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                             {item.analysisStatus || 'Analyzing...'}
                         </span>
                     ) : (
-                        item.tags?.slice(0, 3).map((tag, i) => (
+                        (Array.isArray(item.tags) ? item.tags : []).slice(0, 3).map((tag, i) => (
                         <span 
                             key={i} 
                             onClick={(e) => { e.stopPropagation(); handleTagClick(tag); }}
@@ -437,7 +437,7 @@ const Browse: React.FC = () => {
       }
 
       // 4. Tags
-      const tag = item.tags?.find(t => t.toLowerCase().includes(q));
+      const tag = Array.isArray(item.tags) ? item.tags.find((t: any) => typeof t === 'string' && t.toLowerCase().includes(q)) : undefined;
       if (tag) return { type: 'tag', text: tag };
 
       // 5. Explicit Name Match (fallback, usually obvious)
@@ -462,7 +462,7 @@ const Browse: React.FC = () => {
     const q = searchQuery ? searchQuery.toLowerCase() : '';
     const matchesSearch = searchQuery ? (
         item.name.toLowerCase().includes(q) || 
-        (item.tags && item.tags.some(t => t.toLowerCase().includes(q))) ||
+        (Array.isArray(item.tags) && item.tags.some((t: any) => typeof t === 'string' && t.toLowerCase().includes(q))) ||
         (item.description && item.description.toLowerCase().includes(q)) ||
         (item.videoMetadata?.title && item.videoMetadata.title.toLowerCase().includes(q)) ||
         (item.videoMetadata?.summary && item.videoMetadata.summary.toLowerCase().includes(q)) ||
