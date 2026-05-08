@@ -1093,6 +1093,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   }
               }
 
+              const finalS3Url = getPublicUrl(key);
+
               setItems(prev => prev.map(i => i.id === id ? { 
                   ...i, 
                   syncStatus: 'synced', 
@@ -1101,10 +1103,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   thumbnailUrl: finalThumbnailUrl
               } : i));
               
-              upsertItem({ 
-                  ...newItem, 
-                  syncStatus: 'synced', 
-                  s3Key: key, 
+              bulkUpdateMetadata([id], {
+                  syncStatus: 'synced',
+                  s3Key: key,
                   previewUrl: finalPreviewUrl,
                   thumbnailUrl: finalThumbnailUrl
               });
@@ -1120,8 +1121,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       syncStatus: 'synced' 
                   } : i));
                   
-                  upsertItem({ 
-                      ...newItem, 
+                  bulkUpdateMetadata([id], {
                       s3Key: key, 
                       proxyS3Key: key, 
                       syncStatus: 'synced', 
