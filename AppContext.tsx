@@ -4,8 +4,9 @@ import { generateTagsForBatch, FolderPlan, analyzeVideo, VideoAnalysisResult, Qu
 import { saveFileToDB, getFileFromDB, deleteFileFromDB } from './dbService';
 import { useAuth } from './AuthContext';
 import { supabase } from './supabaseClient';
-import { getPresignedUrl, uploadFileToS3, downloadFileFromS3 } from './storageService';
+import { getPresignedUrl, uploadFileToS3, downloadFileFromS3, getPublicUrl } from './storageService';
 import { fetchItems, upsertItem, deleteItemFromDB as deleteItemFromSupabase, fetchUserProfile } from './supabaseService';
+import { useToast } from './ToastContext';
 
 // --- Types ---
 
@@ -182,6 +183,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { session } = useAuth();
+  const { showToast } = useToast();
   
   // Initialize State from LocalStorage
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!session);
@@ -594,7 +596,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (result) {
                 if (result.tags && result.tags[0] === 'AI Error') {
                      const updated = { ...item, isAnalyzing: false, description: "AI Service Error. Please try again later." };
-                     updateItemInDB(updated.id, { isAnalyzing: false, description: updated.description });
+                     upsertItem(updated);
                      return updated;
                 }
                 const updated = {
@@ -604,7 +606,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     isAnalyzing: false
                 };
                 // PERSIST TO SUPABASE
-                updateItemInDB(updated.id, { isAnalyzing: false, description: updated.description, tags: updated.tags });
+                upsertItem(updated);
                 return updated;
             }
             return item;
@@ -618,8 +620,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              console.warn(`Quota Hit. Retrying batch in 30s. Attempt: ${retryCount}`);
              
              if (retryCount > 3) {
-                  setItems(prev => prev.map(i => validBatch.some(b => b.id === i.id) ? { ...i, description: "Skipped (Quota Limit)", isAnalyzing: false } : i));
-                  validBatch.forEach(b => updateItemInDB(b.id, { isAnalyzing: false, description: "Skipped (Quota Limit)" }));
+                  // updateItemInDB does not exist, use upsertItem internally or let local state sync handle it
+                  // To fix cleanly, we use bulkUpdateMetadata and remove the local setItems duplicate
+                  bulkUpdateMetadata(validBatch.map(b => b.id), { isAnalyzing: false, description: "Skipped (Quota Limit)" });
                   setAnalysisQueue(prev => prev.slice(currentBatch.length));
              } else {
                  const updatedBatch = validBatch.map(b => ({ ...b, retryCount }));
@@ -635,7 +638,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              setItems(prev => prev.map(item => {
                 if (validBatch.some(b => b.id === item.id)) {
                     const updated = { ...item, isAnalyzing: false, description: "Analysis failed (Invalid format/size)." };
-                    updateItemInDB(updated.id, { isAnalyzing: false, description: updated.description });
+                    upsertItem(updated);
                     return updated;
                 }
                 return item;
@@ -715,15 +718,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const item = items.find(i => i.id === task.id);
           if (item) {
             const updates = { model: 'Sony Camera', isAnalyzing: false };
-            setItems(prev => prev.map(i => i.id === task.id ? { ...i, ...updates } : i));
-            updateItemInDB(task.id, updates);
+            // bulkUpdateMetadata handles both local state and upsert
+            bulkUpdateMetadata([task.id], updates);
           }
         }
       } catch (err) {
         console.warn("Background AI metadata analysis failed", err);
         // Clear analyzing flag on error too
-        setItems(prev => prev.map(i => i.id === task.id ? { ...i, isAnalyzing: false, model: 'Sony Camera' } : i));
-        updateItemInDB(task.id, { isAnalyzing: false, model: 'Sony Camera' });
+        bulkUpdateMetadata([task.id], { isAnalyzing: false, model: 'Sony Camera' });
       } finally {
         setVideoMetadataQueue(prev => prev.slice(1));
         setIsProcessingVideoQueue(false);
@@ -774,8 +776,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }));
       } catch (error) {
           console.error("Video Analysis Failed", error);
-          setItems(prev => prev.map(i => i.id === id ? { ...i, isAnalyzing: false } : i));
-          updateItemInDB(id, { isAnalyzing: false });
+          bulkUpdateMetadata([id], { isAnalyzing: false });
           throw error;
       }
   };
@@ -1052,8 +1053,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setVideoMetadataQueue(prev => [...prev, { id, rawMetadata: rawMetadata!, useSmartSort, rootFolderId }]);
           } else {
               // Not enough metadata to analyze. Clear the flag immediately.
-              setItems(prev => prev.map(i => i.id === id ? { ...i, isAnalyzing: false } : i));
-              updateItemInDB(id, { isAnalyzing: false });
+              bulkUpdateMetadata([id], { isAnalyzing: false });
           }
       }
 
