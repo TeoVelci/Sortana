@@ -1268,7 +1268,29 @@ IMPORTANT:
         const response = await callAIWithRetry(() => ai.models.generateContent({
             model: 'gemini-2.5-flash', // Stable model for video
             contents: contentParts,
-            config: { responseMimeType: 'application/json' }
+            config: { 
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        title: { type: Type.STRING },
+                        summary: { type: Type.STRING },
+                        tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        moments: { 
+                            type: Type.ARRAY, 
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    timestamp: { type: Type.STRING },
+                                    description: { type: Type.STRING }
+                                },
+                                required: ["timestamp", "description"]
+                            }
+                        }
+                    },
+                    required: ["title", "summary", "tags", "moments"]
+                }
+            }
         }), 3, 'low'); // Video analysis is low priority background task
 
         if (response.text) {
