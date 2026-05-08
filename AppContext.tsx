@@ -595,7 +595,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const result = results.find(r => r.id === item.id);
             if (result) {
                 if (result.tags && result.tags[0] === 'AI Error') {
-                     const updated = { ...item, isAnalyzing: false, description: "AI Service Error. Please try again later." };
+                     const updated = { ...item, isAnalyzing: false, description: result.description || "AI Service Error. Please try again later." };
                      upsertItem(updated);
                      return updated;
                 }
