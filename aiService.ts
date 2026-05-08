@@ -1120,25 +1120,42 @@ const extractVideoFrames = async (file: File): Promise<ImagePayload[]> => {
         video.muted = true;
         video.playsInline = true; 
         if (!ctx) { reject(new Error("Canvas context failed")); return; }
+        
         video.onloadedmetadata = async () => {
-            const duration = video.duration;
+            // Some browsers return NaN or Infinity for local file Blob durations
+            const duration = (video.duration && isFinite(video.duration)) ? video.duration : 10;
             const interval = Math.max(1, duration / MAX_FRAMES);
             let currentTime = 0;
+            
             const seekResolve = () => {
                 return new Promise<void>((res) => {
+                    let timeoutId: any;
+                    
                     const onSeeked = () => {
+                        clearTimeout(timeoutId);
                         video.removeEventListener('seeked', onSeeked);
-                        canvas.width = 480; 
-                        canvas.height = (video.videoHeight / video.videoWidth) * 480;
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                        frames.push({ data: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+                        
+                        if (video.videoWidth > 0 && video.videoHeight > 0) {
+                            canvas.width = 480; 
+                            canvas.height = (video.videoHeight / video.videoWidth) * 480;
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                            frames.push({ data: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+                        }
                         res();
                     };
+                    
                     video.addEventListener('seeked', onSeeked);
                     video.currentTime = currentTime;
+                    
+                    // Failsafe timeout in case seeked never fires
+                    timeoutId = setTimeout(() => {
+                        video.removeEventListener('seeked', onSeeked);
+                        res();
+                    }, 1500);
                 });
             };
+            
             while (currentTime < duration && frames.length < MAX_FRAMES) {
                 await seekResolve();
                 currentTime += interval;
