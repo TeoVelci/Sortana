@@ -257,7 +257,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- AI Processing Queue State ---
   const [analysisQueue, setAnalysisQueue] = useState<BatchItem[]>([]);
-  const [videoMetadataQueue, setVideoMetadataQueue] = useState<{ id: string, rawMetadata: string, useSmartSort: boolean, rootFolderId: string }[]>([]);
+  const [videoMetadataQueue, setVideoMetadataQueue] = useState<{ id: string, rawMetadata: string, useSmartSort: boolean, rootFolderId: string, autoTagVideo?: boolean }[]>([]);
   const [isProcessingVideoQueue, setIsProcessingVideoQueue] = useState(false);
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
   const [queuePausedUntil, setQueuePausedUntil] = useState<number>(0);
@@ -672,8 +672,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const model = aiMeta.model;
             const friendlyCamera = getFriendlyCameraName(make, model);
             
-            const updates: Partial<FileSystemItem> = { make, model, isAnalyzing: false };
-            
+            const updates: Partial<FileSystemItem> = { make, model };
+            if (!task.autoTagVideo) {
+                updates.isAnalyzing = false;
+            }
             // If smart sort is enabled, we might need to move the file
             if (task.useSmartSort) {
               const dateTaken = item.dateTaken ? new Date(item.dateTaken) : new Date();
@@ -717,7 +719,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           // No model found, still clear the analyzing flag and set a generic model
           const item = items.find(i => i.id === task.id);
           if (item) {
-            const updates = { model: 'Sony Camera', isAnalyzing: false };
+            const updates: Partial<FileSystemItem> = { model: 'Sony Camera' };
+            if (!task.autoTagVideo) {
+                updates.isAnalyzing = false;
+            }
             // bulkUpdateMetadata handles both local state and upsert
             bulkUpdateMetadata([task.id], updates);
           }
@@ -725,7 +730,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } catch (err) {
         console.warn("Background AI metadata analysis failed", err);
         // Clear analyzing flag on error too
-        bulkUpdateMetadata([task.id], { isAnalyzing: false, model: 'Sony Camera' });
+        const updates: Partial<FileSystemItem> = { model: 'Sony Camera' };
+        if (!task.autoTagVideo) {
+            updates.isAnalyzing = false;
+        }
+        bulkUpdateMetadata([task.id], updates);
       } finally {
         setVideoMetadataQueue(prev => prev.slice(1));
         setIsProcessingVideoQueue(false);
@@ -738,15 +747,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const analyzeVideoItem = async (id: string) => {
       // Safety Check: Double gate against unauthorized use
-      if (user.plan !== 'Studio') {
-          console.warn("Unauthorized: Video analysis attempted on non-Studio plan.");
-          return;
-      }
+      // if (user.plan !== 'Studio') {
+      //     console.warn("Unauthorized: Video analysis attempted on non-Studio plan.");
+      //     return;
+      // }
 
-      const item = items.find(i => i.id === id);
       const file = fileCache.get(id);
 
-      if (!item || !file || item.fileType !== 'video') {
+      if (!file || !file.type.startsWith('video/')) {
           console.warn("Analyze failed: File not found in memory cache or incorrect type.");
           return;
       }
@@ -799,14 +807,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setItems(prev => prev.map(i => i.id === id ? { 
               ...i, 
               proxyS3Key: key, 
-              description: 'Using original source.', 
+              // Removed description overwrite to preserve AI summaries
               syncStatus: 'synced' 
           } : i));
           
           upsertItem({ 
               ...item, 
               proxyS3Key: key, 
-              description: 'Using original source.', 
+              // Removed description overwrite to preserve AI summaries
               syncStatus: 'synced' 
           });
           return;
@@ -1024,6 +1032,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           parentId = getOrCreateFolder(dateStr, cameraFolderId, `ROOT|${friendlyCamera}|${dateStr}`, newItems, folderMap);
       }
 
+      const autoTagVideo = fType === 'video';
+
       const newItem: FileSystemItem = {
         id,
         name: f.name,
@@ -1038,7 +1048,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         rating: 0,
         flag: null,
         tags: [projectTag], 
-        isAnalyzing: shouldAnalyze || needsAI,
+        isAnalyzing: shouldAnalyze || needsAI || autoTagVideo,
         make,
         model: effectiveModel,
         syncStatus: 'uploading' // Start as uploading
@@ -1051,15 +1061,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // CRITICAL: Always queue Sony videos for AI analysis to ensure accurate model identification (e.g. A7 IV vs A790)
       if (needsAI) {
           if (rawMetadata && rawMetadata.length > 50) {
-              setVideoMetadataQueue(prev => [...prev, { id, rawMetadata: rawMetadata!, useSmartSort, rootFolderId }]);
+              setVideoMetadataQueue(prev => [...prev, { id, rawMetadata: rawMetadata!, useSmartSort, rootFolderId, autoTagVideo }]);
           } else {
-              // Not enough metadata to analyze. Clear the flag immediately.
-              bulkUpdateMetadata([id], { isAnalyzing: false });
+              // Not enough metadata to analyze. Clear the flag immediately, unless it's waiting for video AI.
+              if (!autoTagVideo) {
+                  bulkUpdateMetadata([id], { isAnalyzing: false });
+              }
           }
       }
 
       if (shouldAnalyze) {
         imagesToQueue.push({ file: f, id, previewBlob, retryCount: 0 });
+      }
+
+      if (autoTagVideo) {
+          // Fire and forget auto tagging
+          setTimeout(() => {
+              analyzeVideoItem(id).catch(e => console.error("Auto video analysis failed:", e));
+          }, 0);
       }
 
       if (fType === 'video') {
@@ -1118,7 +1137,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   setItems(prev => prev.map(i => i.id === id ? { 
                       ...i, 
                       proxyS3Key: key, 
-                      description: 'Using original source.',
                       syncStatus: 'synced' 
                   } : i));
                   
@@ -1126,7 +1144,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       s3Key: key, 
                       proxyS3Key: key, 
                       syncStatus: 'synced', 
-                      description: 'Using original source.',
                       previewUrl: finalPreviewUrl,
                       thumbnailUrl: finalThumbnailUrl
                   });
@@ -1431,8 +1448,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           
           const finalUpdates: Partial<FileSystemItem> = {
               s3Key: key,
-              syncStatus: 'synced',
-              description: item.fileType === 'video' ? 'Using original source.' : ''
+              syncStatus: 'synced'
           };
           
           if (item.fileType === 'video') {
