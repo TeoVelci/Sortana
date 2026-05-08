@@ -1355,7 +1355,7 @@ export const generateTagsForBatch = async (batch: BatchItem[]): Promise<AIAnalys
         return batch.map(b => ({
             id: b.id,
             tags: ['AI Error'],
-            description: 'Analysis failed.'
+            description: `Analysis failed. Error: ${error.message || String(error)}`
         }));
     }
 }
