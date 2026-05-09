@@ -1116,12 +1116,27 @@ const extractVideoFrames = async (file: File): Promise<ImagePayload[]> => {
         const frames: ImagePayload[] = [];
         const MAX_FRAMES = 10; 
         const url = URL.createObjectURL(file);
+        
+        let metadataTimeout: any;
+        const cleanup = () => {
+            clearTimeout(metadataTimeout);
+            URL.revokeObjectURL(url);
+            video.onerror = null;
+            video.onloadedmetadata = null;
+        };
+
+        metadataTimeout = setTimeout(() => {
+            cleanup();
+            reject(new Error("Browser timeout: Unsupported video format or codec for local AI frame extraction."));
+        }, 10000); // 10s max wait for browser to parse video
+
         video.src = url;
         video.muted = true;
         video.playsInline = true; 
-        if (!ctx) { reject(new Error("Canvas context failed")); return; }
+        if (!ctx) { cleanup(); reject(new Error("Canvas context failed")); return; }
         
         video.onloadedmetadata = async () => {
+            clearTimeout(metadataTimeout);
             // Some browsers return NaN or Infinity for local file Blob durations
             const duration = (video.duration && isFinite(video.duration)) ? video.duration : 10;
             const interval = Math.max(1, duration / MAX_FRAMES);
@@ -1160,10 +1175,10 @@ const extractVideoFrames = async (file: File): Promise<ImagePayload[]> => {
                 await seekResolve();
                 currentTime += interval;
             }
-            URL.revokeObjectURL(url);
+            cleanup();
             resolve(frames);
         };
-        video.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Failed to load video")); };
+        video.onerror = () => { cleanup(); reject(new Error("Failed to load video format")); };
     });
 };
 
