@@ -1634,3 +1634,61 @@ export const initializeCopilotChat = (): Chat => {
         }
     });
 };
+
+export const analyzeVideoMetadata = async (fileName: string, rawMetadata?: string): Promise<VideoAnalysisResult> => {
+    const ai = getAI();
+    const prompt = `Generate a descriptive JSON object for this video file based solely on its filename and EXIF metadata (do not attempt to analyze the video frames).
+
+Filename: ${fileName}
+Metadata: ${rawMetadata || "None"}
+
+Schema requirement:
+{
+  "title": "A short, descriptive title",
+  "summary": "A concise summary of what this video might contain",
+  "tags": ["tag1", "tag2"],
+  "moments": []
+}
+
+IMPORTANT:
+- "tags": Generate a comprehensive array of 10-20 tags. These tags should aggressively identify potential objects, activities, concepts, context, setting, and colors based on the filename and metadata.`;
+
+    const response = await callAIWithRetry(() => ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: { 
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING },
+                    summary: { type: Type.STRING },
+                    tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    moments: { 
+                        type: Type.ARRAY, 
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                timestamp: { type: Type.STRING },
+                                description: { type: Type.STRING }
+                            },
+                            required: ["timestamp", "description"]
+                        }
+                    }
+                },
+                required: ["title", "summary", "tags", "moments"]
+            }
+        }
+    }), 3, 'low');
+
+    if (response.text) {
+        const json = parseJSONResponse(response.text);
+        return {
+            title: json?.title || fileName,
+            summary: json?.summary || "No summary available.",
+            tags: Array.isArray(json?.tags) ? json.tags.filter((t: any) => t != null).map(String) : [],
+            moments: []
+        };
+    }
+    throw new Error("Invalid or empty response format");
+};

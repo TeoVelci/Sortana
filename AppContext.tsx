@@ -745,24 +745,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [videoMetadataQueue, isProcessingVideoQueue, items, getOrCreateFolder]);
 
 
-  const analyzeVideoItem = async (id: string) => {
+  const analyzeVideoItem = async (id: string, fileInfo: { name: string, type: string }, rawMetadata?: string) => {
       // Safety Check: Double gate against unauthorized use
       // if (user.plan !== 'Studio') {
       //     console.warn("Unauthorized: Video analysis attempted on non-Studio plan.");
       //     return;
       // }
 
-      const file = fileCache.get(id);
-
-      if (!file || !file.type.startsWith('video/')) {
-          console.warn("Analyze failed: File not found in memory cache or incorrect type.");
+      if (!fileInfo || !fileInfo.type.startsWith('video/')) {
+          console.warn("Analyze failed: File incorrect type.");
           return;
       }
 
       setItems(prev => prev.map(i => i.id === id ? { ...i, isAnalyzing: true } : i));
 
       try {
-          const result: VideoAnalysisResult = await analyzeVideo(file);
+          const result: VideoAnalysisResult = await analyzeVideoMetadata(fileInfo.name, rawMetadata);
           setItems(prev => prev.map(i => {
               if (i.id === id) {
                   const updated = {
@@ -1077,7 +1075,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (autoTagVideo) {
           // Fire and forget auto tagging
           setTimeout(() => {
-              analyzeVideoItem(id).catch(e => console.error("Auto video analysis failed:", e));
+              analyzeVideoItem(id, { name: f.name, type: fType === 'video' ? 'video/mp4' : f.type }, rawMetadata).catch(e => console.error("Auto video analysis failed:", e));
           }, 0);
       }
 
