@@ -747,7 +747,7 @@ const Browse: React.FC = () => {
           return;
       }
 
-      const canEdit = (item.fileType === 'image' && item.previewUrl) || 
+      const canEdit = ((item.fileType === 'image' || item.fileType === 'raw') && item.previewUrl) || 
                       (item.fileType === 'video' && item.proxyS3Key);
 
       if (canEdit) {
