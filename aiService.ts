@@ -1635,7 +1635,7 @@ export const initializeCopilotChat = (): Chat => {
     });
 };
 
-export const analyzeVideoMetadata = async (fileName: string, rawMetadata?: string): Promise<VideoAnalysisResult> => {
+export const generateVideoTagsFromMetadata = async (fileName: string, rawMetadata?: string): Promise<VideoAnalysisResult> => {
     const ai = getAI();
     const prompt = `Generate a descriptive JSON object for this video file based solely on its filename and EXIF metadata (do not attempt to analyze the video frames).
 

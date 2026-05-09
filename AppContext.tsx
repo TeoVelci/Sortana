@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { generateTagsForBatch, FolderPlan, analyzeVideo, VideoAnalysisResult, QuotaExceededError, processFileForDisplay, BatchItem, extractDetailedMetadata, getFriendlyCameraName, analyzeVideoMetadata } from './aiService';
+import { generateTagsForBatch, FolderPlan, analyzeVideo, VideoAnalysisResult, QuotaExceededError, processFileForDisplay, BatchItem, extractDetailedMetadata, getFriendlyCameraName, analyzeVideoMetadata, generateVideoTagsFromMetadata } from './aiService';
 import { saveFileToDB, getFileFromDB, deleteFileFromDB } from './dbService';
 import { useAuth } from './AuthContext';
 import { supabase } from './supabaseClient';
@@ -760,7 +760,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setItems(prev => prev.map(i => i.id === id ? { ...i, isAnalyzing: true } : i));
 
       try {
-          const result: VideoAnalysisResult = await analyzeVideoMetadata(fileInfo.name, rawMetadata);
+          const result: VideoAnalysisResult = await generateVideoTagsFromMetadata(fileInfo.name, rawMetadata);
           setItems(prev => prev.map(i => {
               if (i.id === id) {
                   const updated = {
