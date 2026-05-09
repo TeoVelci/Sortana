@@ -4,11 +4,13 @@ import { GoogleGenAI, FunctionDeclaration, Type, Chat } from "@google/genai";
 declare const __GEMINI_API_KEY__: string | undefined;
 
 export const getApiKey = (): string => {
-    return (typeof __GEMINI_API_KEY__ !== 'undefined' && __GEMINI_API_KEY__) ||
+    const key = (typeof __GEMINI_API_KEY__ !== 'undefined' && __GEMINI_API_KEY__) ||
         import.meta.env.VITE_GEMINI_API_KEY ||
         import.meta.env.VITE_API_KEY ||
         import.meta.env.GEMINI_API_KEY ||
         import.meta.env.API_KEY || "";
+        
+    return key.replace(/^["']|["']$/g, '').trim();
 };
 
 // Helper to get fresh client instance (ensures API key is current)
