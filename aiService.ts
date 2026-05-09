@@ -3,19 +3,21 @@ import { GoogleGenAI, FunctionDeclaration, Type, Chat } from "@google/genai";
 
 declare const __GEMINI_API_KEY__: string | undefined;
 
-// Helper to get fresh client instance (ensures API key is current)
-const getAI = () => {
-    const apiKey = 
-        (typeof __GEMINI_API_KEY__ !== 'undefined' && __GEMINI_API_KEY__) ||
+export const getApiKey = (): string => {
+    return (typeof __GEMINI_API_KEY__ !== 'undefined' && __GEMINI_API_KEY__) ||
         import.meta.env.VITE_GEMINI_API_KEY ||
         import.meta.env.VITE_API_KEY ||
         import.meta.env.GEMINI_API_KEY ||
-        import.meta.env.API_KEY;
+        import.meta.env.API_KEY || "";
+};
 
+// Helper to get fresh client instance (ensures API key is current)
+const getAI = () => {
+    const apiKey = getApiKey();
     if (!apiKey) {
         console.error("Gemini API Key is missing! Please ensure GEMINI_API_KEY or VITE_GEMINI_API_KEY is set in the environment.");
     }
-    return new GoogleGenAI({ apiKey: apiKey || "" });
+    return new GoogleGenAI({ apiKey });
 };
 
 export class QuotaExceededError extends Error {
@@ -1256,17 +1258,104 @@ const parseJSONResponse = (text: string) => {
     }
 };
 
-export const analyzeVideo = async (file: File): Promise<VideoAnalysisResult> => {
-    try {
-        const frames = await extractVideoFrames(file);
-        if (frames.length === 0) throw new Error("Could not extract frames from video");
+// --- GEMINI REST API FOR NATIVE VIDEO PROCESSING ---
+export const uploadFileToGeminiREST = async (file: File): Promise<{ name: string, uri: string, mimeType: string }> => {
+    const apiKey = getApiKey();
+    if (!apiKey) throw new Error("Missing API Key");
 
-        const contentParts: any[] = frames.map(f => ({
-            inlineData: { mimeType: f.mimeType, data: f.data }
-        }));
+    // 1. Initial resumable request
+    const initRes = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+            'X-Goog-Upload-Protocol': 'resumable',
+            'X-Goog-Upload-Command': 'start',
+            'X-Goog-Upload-Header-Content-Length': file.size.toString(),
+            'X-Goog-Upload-Header-Content-Type': file.type || 'video/mp4',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ file: { display_name: file.name } })
+    });
+
+    if (!initRes.ok) throw new Error(`Gemini initialization failed: ${await initRes.text()}`);
+    const uploadUrl = initRes.headers.get('X-Goog-Upload-URL');
+    if (!uploadUrl) throw new Error("Did not receive upload URL from Gemini");
+
+    // 2. Upload bytes
+    const uploadRes = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Length': file.size.toString(),
+            'X-Goog-Upload-Offset': '0',
+            'X-Goog-Upload-Command': 'upload, finalize'
+        },
+        body: file
+    });
+
+    if (!uploadRes.ok) throw new Error(`Gemini upload failed: ${await uploadRes.text()}`);
+    const uploadData = await uploadRes.json();
+    
+    return {
+        name: uploadData.file.name, // e.g. "files/xxxx"
+        uri: uploadData.file.uri,
+        mimeType: uploadData.file.mimeType
+    };
+};
+
+export const waitForGeminiFileActive = async (fileName: string): Promise<void> => {
+    const apiKey = getApiKey();
+    let state = 'PROCESSING';
+    let attempts = 0;
+    while (state === 'PROCESSING' && attempts < 30) { // Max 2.5 minutes
+        await new Promise(r => setTimeout(r, 5000));
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`);
+        if (!res.ok) throw new Error("Failed to check Gemini file status");
+        const data = await res.json();
+        state = data.state;
+        if (state === 'FAILED') throw new Error("Gemini video processing failed on server side");
+        attempts++;
+    }
+    if (state === 'PROCESSING') throw new Error("Gemini video processing timed out");
+};
+
+export const deleteGeminiFile = async (fileName: string): Promise<void> => {
+    try {
+        const apiKey = getApiKey();
+        await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`, {
+            method: 'DELETE'
+        });
+    } catch (e) {
+        console.warn("Failed to clean up Gemini file", e);
+    }
+};
+
+export const analyzeVideo = async (file: File): Promise<VideoAnalysisResult> => {
+    let geminiFileName = '';
+    try {
+        let contentParts: any[] = [];
+        
+        try {
+            const frames = await extractVideoFrames(file);
+            if (frames.length === 0) throw new Error("Could not extract frames from video");
+            contentParts = frames.map(f => ({
+                inlineData: { mimeType: f.mimeType, data: f.data }
+            }));
+        } catch (localError: any) {
+            console.warn("Local video extraction failed, falling back to direct Gemini processing:", localError.message);
+            const uploadInfo = await uploadFileToGeminiREST(file);
+            geminiFileName = uploadInfo.name;
+            
+            await waitForGeminiFileActive(geminiFileName);
+            
+            contentParts = [{
+                fileData: {
+                    fileUri: uploadInfo.uri,
+                    mimeType: uploadInfo.mimeType
+                }
+            }];
+        }
 
         contentParts.push({
-            text: `Here are frames extracted from a video clip. Return a JSON object representing your analysis.
+            text: `Here is a video clip (either extracted frames or direct video data). Return a JSON object representing your analysis.
 Schema requirement:
 {
   "title": "A short, descriptive title",
@@ -1275,7 +1364,7 @@ Schema requirement:
   "moments": [{ "timestamp": "00:00", "description": "Key event" }]
 }
 IMPORTANT:
-- "tags": Generate a comprehensive array of 10-20 tags. These tags should aggressively identify all objects, activities, concepts, context, setting, and colors visible across the video frames.`
+- "tags": Generate a comprehensive array of 10-20 tags. These tags should aggressively identify all objects, activities, concepts, context, setting, and colors visible across the video.`
         });
 
         // Dynamic Client Instantiation
@@ -1313,14 +1402,23 @@ IMPORTANT:
             return {
                 title: json?.title || "Untitled Video",
                 summary: json?.summary || "No summary available.",
-                tags: Array.isArray(json?.tags) ? json.tags : [],
-                moments: Array.isArray(json?.moments) ? json.moments : []
+                tags: Array.isArray(json?.tags) ? json.tags.filter((t: any) => t != null).map(String) : [],
+                moments: Array.isArray(json?.moments) ? json.moments.filter((m: any) => m != null).map((m: any) => ({
+                    timestamp: m.timestamp || "00:00",
+                    description: m.description || "Unknown moment"
+                })) : []
             };
         }
-        throw new Error("No response text from AI");
-    } catch (error) {
+        throw new Error("Invalid or empty response format");
+
+    } catch (error: any) {
         console.error("Video Analysis Failed:", error);
         throw error;
+    } finally {
+        if (geminiFileName) {
+            // Clean up the uploaded file to save Google Cloud quota
+            deleteGeminiFile(geminiFileName).catch(console.error);
+        }
     }
 };
 
