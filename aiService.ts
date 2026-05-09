@@ -1526,11 +1526,14 @@ export const editImageWithAI = async (originalUrl: string, prompt: string): Prom
         const base64Data = await blobUrlToBase64(originalUrl);
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
-            model: 'gemini-2.5-flash', 
+            model: 'gemini-3.1-flash-image-preview', 
             contents: [
                 { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
                 { text: `Edit this image: ${prompt}` }
-            ]
+            ],
+            config: {
+                responseModalities: ["IMAGE"]
+            }
         }), 3, 'high'); // Magic Edit is High Priority (User Waiting)
         let imageBase64: string | null = null;
         if (response.candidates && response.candidates[0].content.parts) {
