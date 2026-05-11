@@ -11,7 +11,20 @@ export const PublicNav: React.FC = () => (
           <div className="flex justify-between items-center h-16">
               <div className="flex-shrink-0 flex items-center gap-2 cursor-pointer">
                   <Link to="/" className="flex items-center gap-2">
-                      <span className="text-3xl font-black tracking-tighter text-primary">S</span>
+                      <div className="flex-shrink-0">
+                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M4 4H8V8H4V4Z" className="fill-primary"/>
+                              <path d="M10 4H14V8H10V4Z" className="fill-gray-400 dark:fill-gray-600" />
+                              <path d="M16 4H20V8H16V4Z" className="fill-gray-400 dark:fill-gray-600" />
+                              <path d="M4 10H8V14H4V10Z" className="fill-gray-400 dark:fill-gray-600" />
+                              <path d="M10 10H14V14H10V10Z" className="fill-primary"/>
+                              <path d="M16 10H20V14H16V10Z" className="fill-gray-400 dark:fill-gray-600" />
+                              <path d="M4 16H8V20H4V16Z" className="fill-gray-400 dark:fill-gray-600" />
+                              <path d="M10 16H14V20H10V16Z" className="fill-gray-400 dark:fill-gray-600" />
+                              <path d="M16 16H20V20H16V16Z" className="fill-primary"/>
+                          </svg>
+                      </div>
+                      <span className="text-xl font-bold tracking-tight text-white pt-1">Sortana AI</span>
                   </Link>
               </div>
               <div className="flex items-center space-x-6">

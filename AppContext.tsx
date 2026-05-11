@@ -1046,7 +1046,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         rating: 0,
         flag: null,
         tags: [projectTag], 
-        isAnalyzing: shouldAnalyze || needsAI || autoTagVideo,
+        isAnalyzing: shouldAnalyze || autoTagVideo,
         make,
         model: effectiveModel,
         syncStatus: 'uploading' // Start as uploading

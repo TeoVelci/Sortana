@@ -34,7 +34,7 @@ const Signup: React.FC = () => {
         setIsLoading(false);
     } else {
         showToast('Account created! Please check your email to verify.', 'success');
-        navigate('/login');
+        navigate('/login?registered=true');
     }
   };
 

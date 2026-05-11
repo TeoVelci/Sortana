@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import AuthLayout from './AuthLayout';
 import { useToast } from './ToastContext';
 import { supabase } from './supabaseClient';
@@ -7,6 +7,9 @@ import { supabase } from './supabaseClient';
 const Login: React.FC = () => {
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isRegistered = searchParams.get('registered') === 'true';
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,6 +44,15 @@ const Login: React.FC = () => {
 
   return (
     <AuthLayout title="Welcome back" subtitle="Please enter your details to sign in.">
+        {isRegistered && (
+            <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-800 dark:text-green-300 text-sm flex items-start gap-3">
+                <i className="fa-solid fa-envelope-circle-check mt-0.5 text-lg"></i>
+                <div>
+                    <p className="font-bold mb-1">Check your email</p>
+                    <p>We've sent you a confirmation link. Please click the link in the email to activate your account before logging in.</p>
+                </div>
+            </div>
+        )}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             
             <button type="button" onClick={handleGoogleLogin} className="flex items-center justify-center gap-3 w-full py-2.5 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-surface-dark transition-colors text-sm font-medium text-gray-700 dark:text-gray-200">
