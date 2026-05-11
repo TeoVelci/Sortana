@@ -9,8 +9,8 @@ interface AuthLayoutProps {
 
 const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitle }) => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-900 p-4">
-      <div className="w-full max-w-5xl bg-white dark:bg-dark-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[600px] border border-gray-200 dark:border-dark-600">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-900 p-4 py-8">
+      <div className="w-full max-w-5xl bg-white dark:bg-dark-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[600px] border border-gray-200 dark:border-dark-600">
         
         {/* Left Side (Visual) */}
         <div className="hidden md:flex flex-col justify-between w-1/2 p-8 bg-gradient-to-br from-blue-600 to-slate-900 relative overflow-hidden">
