@@ -20,7 +20,20 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitle }) =>
           
           <div className="relative z-10">
             <Link to="/" className="flex items-center gap-2 mb-8 group">
-              <span className="text-4xl font-black tracking-tighter text-white drop-shadow-md">S</span>
+                <div className="flex-shrink-0 drop-shadow-md">
+                   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 4H8V8H4V4Z" className="fill-white"/>
+                        <path d="M10 4H14V8H10V4Z" className="fill-white/40" />
+                        <path d="M16 4H20V8H16V4Z" className="fill-white/40" />
+                        <path d="M4 10H8V14H4V10Z" className="fill-white/40" />
+                        <path d="M10 10H14V14H10V10Z" className="fill-white"/>
+                        <path d="M16 10H20V14H16V10Z" className="fill-white/40" />
+                        <path d="M4 16H8V20H4V16Z" className="fill-white/40" />
+                        <path d="M10 16H14V20H10V16Z" className="fill-white/40" />
+                        <path d="M16 16H20V20H16V16Z" className="fill-white"/>
+                    </svg>
+                </div>
+                <span className="text-2xl font-bold tracking-tight text-white pt-1 drop-shadow-md">Sortana AI</span>
             </Link>
             
             <h2 className="text-3xl font-bold text-white mb-4">Your media library,<br/>finally intelligent.</h2>
