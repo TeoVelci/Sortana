@@ -233,7 +233,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
             )}
 
             {/* Content Preview */}
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div className="relative w-full h-full flex items-center justify-center min-h-0 min-w-0">
                 {item.type === 'folder' && (
                 <i className="fa-solid fa-folder text-6xl text-gray-400 group-hover:text-primary transition-colors"></i>
                 )}
