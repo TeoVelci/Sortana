@@ -109,7 +109,8 @@ const ItemCell: React.FC<{ item: FileSystemItem, data: any }> = ({ item, data })
         userPlan,
         getMatchSnippet,
         retryUpload,
-        generateVideoProxy
+        generateVideoProxy,
+        getFileObject
     } = data;
 
     const isSelected = selectedIds.has(item.id);
@@ -118,6 +119,9 @@ const ItemCell: React.FC<{ item: FileSystemItem, data: any }> = ({ item, data })
 
     // Calculate Stack Count (Cheap lookup since we passed allContextItems)
     const stackCount = isStack ? allContextItems.filter((i: any) => i.groupId === item.groupId && i.syncStatus !== 'deleted').length : 0;
+    
+    // Check if original file is in local cache (needed for retry)
+    const hasFile = getFileObject ? !!getFileObject(item.id) : true;
 
     return (
         <div 
@@ -154,12 +158,16 @@ const ItemCell: React.FC<{ item: FileSystemItem, data: any }> = ({ item, data })
                                 e.stopPropagation(); 
                                 if (item.description === 'Proxy failed.' || item.description === 'Proxy timed out.') {
                                     (data as any).generateVideoProxy?.(item.id);
-                                } else if (retryUpload) {
+                                } else if (retryUpload && hasFile) {
                                     retryUpload(item.id); 
+                                } else if (!hasFile && item.description !== 'Proxy failed.' && item.description !== 'Proxy timed out.') {
+                                    // Let AppContext show the error toast
+                                    if (retryUpload) retryUpload(item.id);
                                 }
                             }}
-                            className="bg-red-500 text-white p-1 rounded-md hover:bg-red-600 transition-colors flex items-center gap-1 shadow-lg"
-                            title={item.description === 'Proxy failed.' || item.description === 'Proxy timed out.' ? "Proxy failed. Click to retry." : "Upload failed. Click to retry."}
+                            disabled={!hasFile && item.description !== 'Proxy failed.' && item.description !== 'Proxy timed out.'}
+                            className={`${!hasFile && item.description !== 'Proxy failed.' && item.description !== 'Proxy timed out.' ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} text-white p-1 rounded-md transition-colors flex items-center gap-1 shadow-lg`}
+                            title={item.description === 'Proxy failed.' || item.description === 'Proxy timed out.' ? "Proxy failed. Click to retry." : (!hasFile ? "Cannot retry: file not on this device." : "Upload failed. Click to retry.")}
                          >
                             <i className="fa-solid fa-rotate-right text-[10px]"></i>
                             <span className="text-[9px] font-bold">RETRY</span>
@@ -1021,7 +1029,8 @@ const Browse: React.FC = () => {
                                 userPlan: user.plan,
                                 getMatchSnippet: getMatchSnippet,
                                 retryUpload: retryUpload,
-                                generateVideoProxy: generateVideoProxy
+                                generateVideoProxy: generateVideoProxy,
+                                getFileObject: getFileObject
                             }}
                         />
                     ))}

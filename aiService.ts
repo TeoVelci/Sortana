@@ -818,32 +818,19 @@ export const analyzeVideoMetadata = async (rawMetadata: string): Promise<{ make:
         const ai = getAI();
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: `Analyze the following raw video file metadata and extract the camera make and model. 
+            contents: `Analyze the following raw video file metadata and extract the camera make and model, or the source application/device.
             
             CRITICAL INSTRUCTIONS:
-            1. Your ONLY goal is to find the RAW TECHNICAL camera model code (e.g., "ILCE-7M4", "ILCE-9M2", "FX3", "ZV-E10").
-            2. Ignore all technical noise like "A9M", "A9V", "A91", "A790", "XAVC", "AVC", "LPCM", "CH1", "CH2", "AUDIO", "LEVEL", "BIT", "FPS", "MBPS", "FX40M", "FX12".
-            3. DO NOT confuse "FX40M" or "FX12" with "Sony FX9" or "Sony FX6". These are bitrates, NOT camera models.
-            4. Ignore "friendly" names like "Sony A7 IV" or "A74" in the raw metadata, but you can use them as hints to find the technical code.
-            5. Look for strings starting with "ILCE-", "FX", "ZV-", "NEX-", "SLT-", "DSC-".
-            6. If you find a string like "ILCE-7M4", return it EXACTLY as the model.
-            7. Return the result in JSON format with "make" (e.g., "Sony") and "model" (e.g., "ILCE-7M4") keys.
-            8. If no specific technical code is found, return "Sony Camera" as the model.
-            9. DO NOT return "Sony (Analyzing...)" or any other generic strings.
-            10. DO NOT explain your reasoning. Just return the JSON.
-            11. If you see "ILCE-7M4" anywhere in the metadata, that IS the model.
-            12. If you see "ILCE-7M3" anywhere in the metadata, that IS the model.
-            13. If you see "ILCE-7M2" anywhere in the metadata, that IS the model.
-            14. If you see "ILCE-7" anywhere in the metadata, that IS the model.
-            15. If you see "ILCE-9" anywhere in the metadata, that IS the model.
-            16. If you see "ILCE-1" anywhere in the metadata, that IS the model.
-            17. DO NOT return "FX40M" or "FX12" as a model. These are bitrate/codec info.
-            18. If you see "A7M4" or "A7 IV", and cannot find "ILCE-7M4", return "ILCE-7M4" as the model.
-            19. If you see "A7M3" or "A7 III", and cannot find "ILCE-7M3", return "ILCE-7M3" as the model.
-            20. If you see "A7S3" or "A7S III", return "ILCE-7SM3".
-            21. If you see "A7R4" or "A7R IV", return "ILCE-7RM4".
-            22. If you see "A7R5" or "A7R V", return "ILCE-7RM5".
-            23. If the metadata contains "NonRealTimeMeta" XML, look specifically for the <Model> tag.
+            1. Your goal is to identify exactly what device or software created this file.
+            2. For Sony cameras, look for RAW TECHNICAL camera model codes (e.g., "ILCE-7M4", "ILCE-9M2", "FX3", "ZV-E10"). Ignore noise like "A9M", "A9V", "XAVC", "FX40M".
+            3. For Apple devices, look for iPhone models (e.g., "iPhone 15 Pro", "iPhone 13").
+            4. For other brands (Canon, Nikon, Samsung, Google), extract their specific model strings.
+            5. If the metadata indicates the file was generated or exported by software (e.g., "Adobe Lightroom", "Adobe Premiere Pro", "Final Cut Pro"), return the software company as the "make" and the software name as the "model".
+            6. If the metadata indicates the file was downloaded from a messaging app or social media (e.g., "WhatsApp", "Telegram", "Instagram", "Snapchat"), return the app name as both "make" and "model" (e.g., {"make": "WhatsApp", "model": "WhatsApp Video"}).
+            7. Return the result in JSON format with strictly "make" and "model" keys.
+            8. If absolutely NO specific camera, software, or app identifier is found, return "Unknown" for both make and model. DO NOT hallucinate or guess. DO NOT default to Sony.
+            9. DO NOT explain your reasoning. Just return the JSON.
+            10. For Sony: If you see "ILCE-7M4", "ILCE-7M3", "ILCE-1", "ILCE-9", etc., return that exact string as the model.
             
             Metadata Snippets:
             ${rawMetadata.substring(0, 100000)}`, // Limit size
