@@ -53,9 +53,6 @@ const Dashboard: React.FC = () => {
     handleFiles(e.target.files);
   };
 
-  const triggerFileInput = () => {
-    fileInputRef.current?.click();
-  };
 
   const startUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,13 +102,13 @@ const Dashboard: React.FC = () => {
         
         {/* Left Column (Upload) */}
         <div className="col-span-12 lg:col-span-7 flex flex-col gap-6">
-          <div 
+          <label 
+            htmlFor="file-upload"
             id="upload-zone"
             className={`flex-1 min-h-[300px] md:min-h-[400px] relative rounded-2xl bg-gray-100 dark:bg-surface-dark border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center text-center p-6 md:p-10 cursor-pointer group ${isDragOver ? 'bg-indigo-50 dark:bg-surface-dark border-primary' : 'border-gray-300 dark:border-white/10 hover:border-gray-400 dark:hover:border-white/20'}`}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
-            onClick={triggerFileInput}
           >
             <div className="w-16 h-16 mb-6 text-gray-400 group-hover:text-primary transition-colors">
               <i className="fa-solid fa-arrow-up-from-bracket text-6xl text-gray-300 dark:text-zinc-700 group-hover:dark:text-primary transition-colors"></i>
@@ -120,6 +117,7 @@ const Dashboard: React.FC = () => {
             <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">or click to browse photos & videos up to 10GB</p>
 
             <input 
+              id="file-upload"
               ref={fileInputRef}
               type="file" 
               accept="image/*,video/*"
@@ -131,7 +129,7 @@ const Dashboard: React.FC = () => {
 
             {/* File List */}
             {filesToUpload.length > 0 && (
-              <div className="w-full max-w-md mt-4 z-10" onClick={(e) => e.stopPropagation()}>
+              <div className="w-full max-w-md mt-4 z-10" onClick={(e) => e.preventDefault()}>
                 <div className="bg-white dark:bg-dark-900/80 rounded-lg p-4 border border-gray-200 dark:border-white/10 max-h-48 overflow-y-auto text-left shadow-lg">
                   <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Selected Files ({filesToUpload.length})</h4>
                   <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
@@ -145,7 +143,7 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
             )}
-          </div>
+          </label>
 
           <div className="bg-white dark:bg-surface-dark border border-gray-200 dark:border-white/10 rounded-xl p-5 flex flex-col gap-4 shadow-sm">
             <div>
