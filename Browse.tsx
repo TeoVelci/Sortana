@@ -39,7 +39,8 @@ const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
     return (
         <video 
             src={directUrl ? `${directUrl}#t=0.001` : undefined}
-            className="w-full h-full object-contain bg-black"
+            poster={item.thumbnailUrl || undefined}
+            className="absolute inset-0 w-full h-full object-contain bg-black"
             muted
             loop
             playsInline
@@ -128,18 +129,27 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
     // Calculate Stack Count (Cheap lookup since we passed allContextItems)
     const stackCount = isStack ? allContextItems.filter(i => i.groupId === item.groupId && i.syncStatus !== 'deleted').length : 0;
 
+    // Separate vertical and horizontal gutters for a strict vertical gap
+    const hGutter = 12; // 24px horizontal gap total
+    const vGutter = 24; // 48px vertical gap total
+    
+    const cellStyle = {
+        ...style,
+        left: (style.left as number) + hGutter,
+        top: (style.top as number) + vGutter,
+        width: (style.width as number) - (hGutter * 2),
+        height: (style.height as number) - (vGutter * 2),
+    };
+
     return (
         <div 
-            style={style}
-            className="px-1 pt-1 pb-8"
+            style={cellStyle}
+            className={`group cursor-pointer relative flex flex-col transition-transform duration-200 ${isSelected ? 'bg-indigo-50/50 dark:bg-primary/5 scale-95' : 'hover:bg-gray-50 dark:hover:bg-white/5 hover:scale-[1.02]'} p-2 rounded-2xl`}
+            onClick={(e) => { e.stopPropagation(); onItemClick(e, item); }}
+            onDoubleClick={(e) => { e.stopPropagation(); onItemDoubleClick(e, item); }}
+            draggable
+            onDragStart={(e) => onDragStart(e, item)}
         >
-            <div 
-                className={`group cursor-pointer h-full flex flex-col p-2 rounded-2xl transition-all duration-200 ${isSelected ? 'bg-indigo-50/50 dark:bg-primary/5' : 'hover:bg-gray-50 dark:hover:bg-white/5'} ${isSelected ? 'scale-95' : 'hover:scale-[1.02]'}`}
-                onClick={(e) => { e.stopPropagation(); onItemClick(e, item); }}
-                onDoubleClick={(e) => { e.stopPropagation(); onItemDoubleClick(e, item); }}
-                draggable
-                onDragStart={(e) => onDragStart(e, item)}
-            >
             {/* STACK EFFECT UNDERLAY */}
             {isStack && (
                 <div className="absolute top-1 left-2 w-[calc(100%-16px)] aspect-square bg-gray-300 dark:bg-dark-800 rounded-2xl border border-white/10 rotate-2 z-0"></div>
@@ -318,7 +328,6 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                         </>
                     )
                 )}
-            </div>
             </div>
             </div>
         </div>
