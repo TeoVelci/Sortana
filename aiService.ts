@@ -192,28 +192,12 @@ const extractMp4Metadata = async (file) => {
 
                         if (!isNoise) {
                             result.rawMetadata += " [PRIORITY: " + line + "] ";
-                            
-                            // Prefer more specific models (longer strings or ILCE- prefix)
-                            const isMoreSpecific = !result.model || 
-                                                 (matched.startsWith('ILCE-') && !result.model.startsWith('ILCE-')) ||
-                                                 (matched.length > result.model.length);
-
-                            if (isMoreSpecific) {
-                                result.make = 'Sony';
-                                result.model = matched;
-                                result.confidence = matched.startsWith('ILCE-') ? 95 : 60;
-                            }
+                            // Let the AI handle the actual model extraction. We just provide the raw data.
                         } else {
                             result.rawMetadata += " [CODEC_INFO: " + line + "] ";
                         }
                     }
                     
-                    // Generic Sony detection
-                    if (line.toUpperCase() === 'SONY' && !result.make) {
-                        result.make = 'Sony';
-                        result.confidence = Math.max(result.confidence, 40);
-                    }
-
                     result.rawMetadata += line + " ";
                 }
             }
