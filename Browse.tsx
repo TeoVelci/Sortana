@@ -265,7 +265,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                 )}
                 
                 {item.type === 'file' && item.fileType === 'video' && (
-                <div className="relative w-full h-full flex items-center justify-center bg-black">
+                <div className="absolute inset-1 bg-black rounded-xl overflow-hidden flex items-center justify-center">
                     {(item.proxyS3Key || item.s3Key) ? (
                         <VideoThumbnail item={item} />
                     ) : (
@@ -1038,7 +1038,7 @@ const Browse: React.FC = () => {
                         // Dynamic Row height based on column width to maintain square aspect ratio for boxes
                         // Card is aspect-square + text block (~110px) + strict vertical gap (30px)
                         const columnWidth = width / columnCount;
-                        const ROW_HEIGHT = columnWidth + 140;
+                        const ROW_HEIGHT = columnWidth + 180;
 
                         return (
                             <Grid
