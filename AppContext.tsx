@@ -959,12 +959,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const imagesToQueue: BatchItem[] = [];
     const folderMap = new Map<string, string>();
 
-    // 1. Identify sidecar XML files for Sony metadata pairing
+    // 1. Identify sidecar XML files and Ghost iOS JPEGs
     const xmlMap = new Map<string, File>();
+    const videoBases = new Set<string>();
+
     for (const f of files) {
         if (f.name.toLowerCase().endsWith('.xml')) {
             const baseName = f.name.substring(0, f.name.lastIndexOf('.')).toUpperCase();
             xmlMap.set(baseName, f);
+        } else if (f.name.match(/\.(mp4|mov|m4v)$/i)) {
+            const baseName = f.name.substring(0, f.name.lastIndexOf('.')).toLowerCase();
+            videoBases.add(baseName);
         }
     }
 
@@ -972,6 +977,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     for (const f of files) {
       if (f.name.toLowerCase().endsWith('.xml')) continue; // Skip XML files as items, they are sidecars
+
+      // Filter out iOS Safari ghost JPEGs injected alongside videos
+      const isJpeg = f.name.match(/\.(jpeg|jpg)$/i);
+      if (isJpeg) {
+          const baseName = f.name.substring(0, f.name.lastIndexOf('.')).toLowerCase();
+          if (videoBases.has(baseName)) {
+              console.log(`Skipping ghost JPEG: ${f.name} because video version exists.`);
+              continue; 
+          }
+      }
 
       const id = Math.random().toString(36).substr(2, 9);
       // Cache file in memory for immediate AI processing
@@ -992,12 +1007,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           // Generate high-res preview (2560px)
           const processed = await processFileForDisplay(f, 2560);
           const isRaw = f.type.includes('raw') || f.name.toLowerCase().match(/\.(arw|cr2|cr3|nef|dng|orf|rw2|raf)$/i);
+          const isVideoFile = f.type.startsWith('video/') || f.name.match(/\.(mp4|mov|m4v)$/i);
           
           if (processed) {
               previewBlob = processed;
               previewUrl = URL.createObjectURL(processed);
-              fType = isRaw ? 'raw' : 'image';
-              shouldAnalyze = true;
+              fType = isVideoFile ? 'video' : (isRaw ? 'raw' : 'image');
+              shouldAnalyze = !isVideoFile; // Only JPEGs/RAWs go to image AI
               
               // Generate small thumbnail (1024px) for grid performance
               const thumb = await processFileForDisplay(f, 1024);
