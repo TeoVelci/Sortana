@@ -158,8 +158,10 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                     <div className="absolute top-2 left-3 w-[calc(100%-24px)] aspect-square bg-gray-400 dark:bg-dark-700 rounded-2xl border border-white/10 -rotate-1 z-0"></div>
             )}
 
+            {/* Square Box Wrapper (Fixes Safari Flex Percentage Padding Bug) */}
+            <div className="w-full shrink-0 mb-3 relative">
             {/* Square Box */}
-            <div className={`w-full pt-[100%] bg-gray-100 dark:bg-dark-900 rounded-2xl mb-3 border transition-all relative overflow-hidden shrink-0 z-10 ${isSelected ? 'border-primary ring-2 ring-primary/50' : 'border-transparent dark:border-white/10 hover:border-primary/50'}`}>
+            <div className={`w-full pt-[100%] bg-gray-100 dark:bg-dark-900 rounded-2xl border transition-all relative overflow-hidden z-10 ${isSelected ? 'border-primary ring-2 ring-primary/50' : 'border-transparent dark:border-white/10 hover:border-primary/50'}`}>
             
             {/* Selection Checkmark */}
             <div className={`absolute top-2 left-2 z-30 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
@@ -289,6 +291,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                         <span className="material-icons-outlined text-5xl text-gray-500">description</span>
                 </div>
                 )}
+            </div>
             </div>
             </div>
 
