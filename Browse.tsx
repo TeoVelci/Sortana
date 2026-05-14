@@ -40,7 +40,7 @@ const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
         <video 
             src={directUrl ? `${directUrl}#t=0.001` : undefined}
             poster={item.thumbnailUrl || undefined}
-            className="absolute inset-0 w-full h-full object-contain bg-black"
+            className="w-full h-full object-contain bg-black"
             muted
             loop
             playsInline
@@ -159,7 +159,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
             )}
 
             {/* Square Box */}
-            <div className={`w-full aspect-square bg-gray-100 dark:bg-dark-900 rounded-2xl flex items-center justify-center p-1 mb-3 border transition-all relative overflow-hidden shrink-0 z-10 ${isSelected ? 'border-primary ring-2 ring-primary/50' : 'border-transparent dark:border-white/10 hover:border-primary/50'}`}>
+            <div className={`w-full aspect-square bg-gray-100 dark:bg-dark-900 rounded-2xl flex items-center justify-center p-1 mb-3 border transition-all relative overflow-hidden shrink-0 min-h-0 min-w-0 z-10 ${isSelected ? 'border-primary ring-2 ring-primary/50' : 'border-transparent dark:border-white/10 hover:border-primary/50'}`}>
             
             {/* Selection Checkmark */}
             <div className={`absolute top-2 left-2 z-30 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
@@ -265,7 +265,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                 )}
                 
                 {item.type === 'file' && item.fileType === 'video' && (
-                <div className="absolute inset-1 bg-black rounded-xl overflow-hidden flex items-center justify-center">
+                <div className="relative w-full h-full flex items-center justify-center bg-black">
                     {(item.proxyS3Key || item.s3Key) ? (
                         <VideoThumbnail item={item} />
                     ) : (
