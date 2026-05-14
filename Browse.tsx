@@ -7,8 +7,7 @@ import { supabase } from './supabaseClient';
 import MagicEditor from './MagicEditor';
 import ExportModal from './ExportModal';
 import CleanupModal from './CleanupModal';
-import { FixedSizeGrid as Grid } from 'react-window';
-import AutoSizer from 'react-virtualized-auto-sizer';
+// Removed react-window imports
 
 // --- Subcomponents ---
 const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
@@ -40,7 +39,7 @@ const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
         <video 
             src={directUrl ? `${directUrl}#t=0.001` : undefined}
             poster={item.thumbnailUrl || undefined}
-            className="w-full h-full object-contain bg-black"
+            className="w-full h-auto object-contain bg-black rounded-lg"
             muted
             loop
             playsInline
@@ -95,11 +94,9 @@ const StarRating = ({ rating, onChange }: { rating: number, onChange?: (r: numbe
     );
 };
 
-// --- Virtualized Cell Component ---
-const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }) => {
+// --- Native CSS Grid Cell Component ---
+const ItemCell: React.FC<{ item: FileSystemItem, data: any }> = ({ item, data }) => {
     const { 
-        items, 
-        columnCount, 
         selectedIds, 
         isStackingEnabled, 
         allContextItems, 
@@ -111,39 +108,19 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
         handleTagClick,
         userPlan,
         getMatchSnippet,
-        retryUpload
+        retryUpload,
+        generateVideoProxy
     } = data;
 
-    const index = rowIndex * columnCount + columnIndex;
-    
-    // Boundary check
-    if (index >= items.length) {
-        return null;
-    }
-
-    const item = items[index];
     const isSelected = selectedIds.has(item.id);
     const matchSnippet = searchQuery ? getMatchSnippet(item, searchQuery) : null;
     const isStack = item.groupId && item.isStackTop && isStackingEnabled;
 
     // Calculate Stack Count (Cheap lookup since we passed allContextItems)
-    const stackCount = isStack ? allContextItems.filter(i => i.groupId === item.groupId && i.syncStatus !== 'deleted').length : 0;
-
-    // Separate vertical and horizontal gutters for a strict vertical gap
-    const hGutter = 12; // 24px horizontal gap total
-    const vGutter = 24; // 48px vertical gap total
-    
-    const cellStyle = {
-        ...style,
-        left: (style.left as number) + hGutter,
-        top: (style.top as number) + vGutter,
-        width: (style.width as number) - (hGutter * 2),
-        height: (style.height as number) - (vGutter * 2),
-    };
+    const stackCount = isStack ? allContextItems.filter((i: any) => i.groupId === item.groupId && i.syncStatus !== 'deleted').length : 0;
 
     return (
         <div 
-            style={cellStyle}
             className={`group cursor-pointer relative flex flex-col transition-transform duration-200 ${isSelected ? 'bg-indigo-50/50 dark:bg-primary/5 scale-95' : 'hover:bg-gray-50 dark:hover:bg-white/5 hover:scale-[1.02]'} p-2 rounded-2xl`}
             onClick={(e) => { e.stopPropagation(); onItemClick(e, item); }}
             onDoubleClick={(e) => { e.stopPropagation(); onItemDoubleClick(e, item); }}
@@ -233,7 +210,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
             )}
 
             {/* Content Preview */}
-            <div className="w-full h-full flex items-center justify-center">
+            <div className="w-full flex-1 flex flex-col items-center justify-center">
                 {item.type === 'folder' && (
                 <i className="fa-solid fa-folder text-6xl text-gray-400 group-hover:text-primary transition-colors"></i>
                 )}
@@ -242,7 +219,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                 <img 
                     src={item.thumbnailUrl || item.previewUrl} 
                     alt={item.name} 
-                    className="w-full h-full object-contain"
+                    className="w-full h-auto object-contain rounded-lg"
                     loading="lazy"
                     onError={(e) => {
                         e.currentTarget.style.display = 'none';
@@ -265,7 +242,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                 )}
                 
                 {item.type === 'file' && item.fileType === 'video' && (
-                <div className="relative w-full h-full flex items-center justify-center bg-black">
+                <div className="relative w-full flex-1 flex flex-col items-center justify-center bg-black rounded-lg overflow-hidden">
                     {(item.proxyS3Key || item.s3Key) ? (
                         <VideoThumbnail item={item} />
                     ) : (
@@ -1019,60 +996,36 @@ const Browse: React.FC = () => {
       {/* --- Main Content Split View --- */}
       <div className="flex-1 flex overflow-hidden relative">
           
-          {/* Virtualized Items Grid */}
+          {/* Native CSS Grid */}
           <div 
              id="browse-grid"
-             className="flex-1" // IMPORTANT: No padding here, AutoSizer needs full space
+             className="flex-1 overflow-y-auto overflow-x-hidden p-4"
              onClick={() => { /* clicking empty space */ setSelectedIds(new Set()) }}
           >
             {currentItems.length > 0 ? (
-                <AutoSizer>
-                    {({ height, width }) => {
-                        // Calculate columns based on width (responsive logic)
-                        let columnCount = 2;
-                        if (width >= 768) columnCount = 3;
-                        if (width >= 1024) columnCount = 4;
-                        if (width >= 1280) columnCount = 5;
-
-                        // Calculate rows
-                        const rowCount = Math.ceil(currentItems.length / columnCount);
-                        
-                        // Dynamic Row height based on column width to maintain square aspect ratio for boxes
-                        // Card is aspect-square + text block (~110px) + strict vertical gap (30px)
-                        const columnWidth = width / columnCount;
-                        const ROW_HEIGHT = columnWidth + 180;
-
-                        return (
-                            <Grid
-                                columnCount={columnCount}
-                                columnWidth={width / columnCount}
-                                height={height}
-                                rowCount={rowCount}
-                                rowHeight={ROW_HEIGHT}
-                                width={width}
-                                itemData={{
-                                    items: currentItems,
-                                    columnCount,
-                                    selectedIds,
-                                    isStackingEnabled,
-                                    allContextItems: items,
-                                    searchQuery,
-                                    onItemClick: handleItemClick,
-                                    onItemDoubleClick: handleItemDoubleClick,
-                                    onDragStart: handleDragStart,
-                                    onAnalyzeVideo: handleAnalyzeVideo,
-                                    handleTagClick: handleTagClick,
-                                    userPlan: user.plan,
-                                    getMatchSnippet: getMatchSnippet,
-                                    retryUpload: retryUpload,
-                                    generateVideoProxy: generateVideoProxy
-                                }}
-                            >
-                                {VirtualCell}
-                            </Grid>
-                        );
-                    }}
-                </AutoSizer>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                    {currentItems.map((item) => (
+                        <ItemCell
+                            key={item.id}
+                            item={item}
+                            data={{
+                                selectedIds,
+                                isStackingEnabled,
+                                allContextItems: items,
+                                searchQuery,
+                                onItemClick: handleItemClick,
+                                onItemDoubleClick: handleItemDoubleClick,
+                                onDragStart: handleDragStart,
+                                onAnalyzeVideo: handleAnalyzeVideo,
+                                handleTagClick: handleTagClick,
+                                userPlan: user.plan,
+                                getMatchSnippet: getMatchSnippet,
+                                retryUpload: retryUpload,
+                                generateVideoProxy: generateVideoProxy
+                            }}
+                        />
+                    ))}
+                </div>
             ) : (
                 <div className="flex flex-col items-center justify-center h-full text-gray-500">
                     <span className="material-icons-outlined text-6xl mb-4 text-gray-300 dark:text-zinc-700">filter_none</span>
