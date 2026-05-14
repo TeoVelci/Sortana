@@ -159,7 +159,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
             )}
 
             {/* Square Box */}
-            <div className={`w-full aspect-square bg-gray-100 dark:bg-dark-900 rounded-2xl flex items-center justify-center p-1 mb-3 border transition-all relative overflow-hidden shrink-0 min-h-0 min-w-0 z-10 ${isSelected ? 'border-primary ring-2 ring-primary/50' : 'border-transparent dark:border-white/10 hover:border-primary/50'}`}>
+            <div className={`w-full pt-[100%] bg-gray-100 dark:bg-dark-900 rounded-2xl mb-3 border transition-all relative overflow-hidden shrink-0 z-10 ${isSelected ? 'border-primary ring-2 ring-primary/50' : 'border-transparent dark:border-white/10 hover:border-primary/50'}`}>
             
             {/* Selection Checkmark */}
             <div className={`absolute top-2 left-2 z-30 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
@@ -233,7 +233,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
             )}
 
             {/* Content Preview */}
-            <div className="relative w-full h-full flex items-center justify-center min-h-0 min-w-0">
+            <div className="absolute inset-1 flex items-center justify-center">
                 {item.type === 'folder' && (
                 <i className="fa-solid fa-folder text-6xl text-gray-400 group-hover:text-primary transition-colors"></i>
                 )}
