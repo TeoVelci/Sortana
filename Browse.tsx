@@ -128,25 +128,18 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
     // Calculate Stack Count (Cheap lookup since we passed allContextItems)
     const stackCount = isStack ? allContextItems.filter(i => i.groupId === item.groupId && i.syncStatus !== 'deleted').length : 0;
 
-    // Adjust style for gap (padding inside the cell)
-    const gutter = 12; // Half of gap-6 (24px)
-    const cellStyle = {
-        ...style,
-        left: (style.left as number) + gutter,
-        top: (style.top as number) + gutter,
-        width: (style.width as number) - (gutter * 2),
-        height: (style.height as number) - (gutter * 2),
-    };
-
     return (
         <div 
-            style={cellStyle}
-            className={`group cursor-pointer relative flex flex-col transition-transform duration-200 ${isSelected ? 'scale-95' : 'hover:scale-[1.02]'}`}
-            onClick={(e) => { e.stopPropagation(); onItemClick(e, item); }}
-            onDoubleClick={(e) => { e.stopPropagation(); onItemDoubleClick(e, item); }}
-            draggable
-            onDragStart={(e) => onDragStart(e, item)}
+            style={style}
+            className="px-1 pt-1 pb-8"
         >
+            <div 
+                className={`group cursor-pointer h-full flex flex-col p-2 rounded-2xl transition-all duration-200 ${isSelected ? 'bg-indigo-50/50 dark:bg-primary/5' : 'hover:bg-gray-50 dark:hover:bg-white/5'} ${isSelected ? 'scale-95' : 'hover:scale-[1.02]'}`}
+                onClick={(e) => { e.stopPropagation(); onItemClick(e, item); }}
+                onDoubleClick={(e) => { e.stopPropagation(); onItemDoubleClick(e, item); }}
+                draggable
+                onDragStart={(e) => onDragStart(e, item)}
+            >
             {/* STACK EFFECT UNDERLAY */}
             {isStack && (
                 <div className="absolute top-1 left-2 w-[calc(100%-16px)] aspect-square bg-gray-300 dark:bg-dark-800 rounded-2xl border border-white/10 rotate-2 z-0"></div>
@@ -325,6 +318,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                         </>
                     )
                 )}
+            </div>
             </div>
             </div>
         </div>
@@ -1033,9 +1027,9 @@ const Browse: React.FC = () => {
                         const rowCount = Math.ceil(currentItems.length / columnCount);
                         
                         // Dynamic Row height based on column width to maintain square aspect ratio for boxes
-                        // Card is aspect-square + text block (~110px)
+                        // Card is aspect-square + text block (~110px) + strict vertical gap (30px)
                         const columnWidth = width / columnCount;
-                        const ROW_HEIGHT = columnWidth + 110;
+                        const ROW_HEIGHT = columnWidth + 140;
 
                         return (
                             <Grid
