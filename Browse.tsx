@@ -233,7 +233,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
             )}
 
             {/* Content Preview */}
-            <div className="w-full h-full flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center justify-center">
                 {item.type === 'folder' && (
                 <i className="fa-solid fa-folder text-6xl text-gray-400 group-hover:text-primary transition-colors"></i>
                 )}
@@ -265,7 +265,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                 )}
                 
                 {item.type === 'file' && item.fileType === 'video' && (
-                <div className="relative w-full h-full flex items-center justify-center bg-black">
+                <div className="absolute inset-0 flex items-center justify-center bg-black">
                     {(item.proxyS3Key || item.s3Key) ? (
                         <VideoThumbnail item={item} />
                     ) : (
@@ -692,8 +692,8 @@ const Browse: React.FC = () => {
 
       showToast("Deep Video Analysis started...", "info");
       try {
-          await analyzeVideoItem(id);
-          showToast("Video analysis complete!", "success");
+          await analyzeVideoItem(id, { name: file.name, type: file.type });
+          showToast("Video analysis queued!", "success");
       } catch (e) {
           showToast("Analysis failed. Try again.", "error");
       }

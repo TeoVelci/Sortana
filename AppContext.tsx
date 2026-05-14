@@ -109,7 +109,7 @@ interface AppContextType {
   deleteItem: (id: string) => void;
   updateItemMetadata: (id: string, updates: Partial<FileSystemItem>) => void;
   executeOrganizationPlan: (plan: FolderPlan[], targetParentId?: string | null) => void;
-  analyzeVideoItem: (id: string) => Promise<void>;
+  analyzeVideoItem: (id: string, fileInfo?: { name: string, type: string }, rawMetadata?: string) => Promise<void>;
   generateVideoProxy: (id: string) => Promise<void>;
   
   // View Actions
@@ -257,6 +257,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- AI Processing Queue State ---
   const [analysisQueue, setAnalysisQueue] = useState<BatchItem[]>([]);
+  const [videoAnalysisQueue, setVideoAnalysisQueue] = useState<{ id: string, fileInfo: { name: string, type: string }, rawMetadata: string }[]>([]);
+  const [isProcessingVideoAnalysisQueue, setIsProcessingVideoAnalysisQueue] = useState(false);
   const [videoMetadataQueue, setVideoMetadataQueue] = useState<{ id: string, rawMetadata: string, useSmartSort: boolean, rootFolderId: string, autoTagVideo?: boolean }[]>([]);
   const [isProcessingVideoQueue, setIsProcessingVideoQueue] = useState(false);
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
@@ -382,14 +384,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   }
 
                   // 3. Fix Stuck Analysis
-                  // We no longer mark them as complete here, but let the re-queue effect handle it
-                  if (newItem.isAnalyzing && !newCache.has(newItem.id) && !newItem.s3Key) {
-                      newItem.isAnalyzing = false;
-                      if (!newItem.description) {
-                          newItem.description = "Analysis skipped (file lost).";
+                  // For images, we let the re-queue effect handle it.
+                  // For videos, since we have no re-queue, we reset them.
+                  // Also if they have no s3Key, they are definitely stuck.
+                  if (newItem.isAnalyzing) {
+                      if (newItem.fileType === 'video' || (!newCache.has(newItem.id) && !newItem.s3Key)) {
+                          newItem.isAnalyzing = false;
+                          if (!newItem.description) {
+                              newItem.description = "Analysis skipped (file lost or reloaded).";
+                          }
+                          itemChanged = true;
+                          upsertItem(newItem);
                       }
-                      itemChanged = true;
-                      upsertItem(newItem);
                   }
               }
               
@@ -524,7 +530,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             return [...prev, ...filtered];
         });
     }
-  }, [items, analysisQueue]);
+
+    const stuckVideos = items.filter(i => i.isAnalyzing && i.fileType === 'video' && !videoAnalysisQueue.some(q => q.id === i.id) && !videoMetadataQueue.some(q => q.id === i.id));
+    if (stuckVideos.length > 0) {
+        bulkUpdateMetadata(stuckVideos.map(v => v.id), { isAnalyzing: false, description: "Analysis skipped (stuck)" });
+    }
+  }, [items, analysisQueue, videoAnalysisQueue, videoMetadataQueue]);
 
   // --- Global Queue Processor ---
   useEffect(() => {
@@ -744,48 +755,63 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     processNextVideo();
   }, [videoMetadataQueue, isProcessingVideoQueue, items, getOrCreateFolder]);
 
+  // --- Deep Video Analysis Queue Processor ---
+  useEffect(() => {
+    if (videoAnalysisQueue.length === 0 || isProcessingVideoAnalysisQueue) return;
 
-  const analyzeVideoItem = async (id: string, fileInfo: { name: string, type: string }, rawMetadata?: string) => {
-      // Safety Check: Double gate against unauthorized use
-      // if (user.plan !== 'Studio') {
-      //     console.warn("Unauthorized: Video analysis attempted on non-Studio plan.");
-      //     return;
-      // }
+    const processNext = async () => {
+        setIsProcessingVideoAnalysisQueue(true);
+        const task = videoAnalysisQueue[0];
+        
+        try {
+            const result: VideoAnalysisResult = await generateVideoTagsFromMetadata(task.fileInfo.name, task.rawMetadata);
+            setItems(prev => prev.map(i => {
+                if (i.id === task.id) {
+                    const updated = {
+                        ...i,
+                        name: result.title || i.name,
+                        description: result.summary,
+                        tags: [...(Array.isArray(i.tags) ? i.tags : []), ...(Array.isArray(result.tags) ? result.tags : [])],
+                        videoMetadata: {
+                            title: result.title,
+                            summary: result.summary,
+                            moments: result.moments
+                        },
+                        isAnalyzing: false
+                    };
+                    upsertItem(updated);
+                    return updated;
+                }
+                return i;
+            }));
+        } catch (error: any) {
+            console.error("Video Analysis Failed", error);
+            bulkUpdateMetadata([task.id], { isAnalyzing: false, description: "Analysis failed (Invalid format/size)." });
+        } finally {
+            setVideoAnalysisQueue(prev => prev.slice(1));
+            setIsProcessingVideoAnalysisQueue(false);
+        }
+    };
+    processNext();
+  }, [videoAnalysisQueue, isProcessingVideoAnalysisQueue]);
+  const analyzeVideoItem = async (id: string, fileInfo?: { name: string, type: string }, rawMetadata?: string) => {
+      let info = fileInfo;
+      if (!info) {
+          const f = fileCache.get(id);
+          if (f) info = { name: f.name, type: f.type };
+      }
 
-      if (!fileInfo || !fileInfo.type.startsWith('video/')) {
+      if (!info || !info.type.startsWith('video/')) {
           console.warn("Analyze failed: File incorrect type.");
           return;
       }
 
       setItems(prev => prev.map(i => i.id === id ? { ...i, isAnalyzing: true } : i));
 
-      try {
-          const result: VideoAnalysisResult = await generateVideoTagsFromMetadata(fileInfo.name, rawMetadata);
-          setItems(prev => prev.map(i => {
-              if (i.id === id) {
-                  const updated = {
-                      ...i,
-                      name: result.title || i.name,
-                      description: result.summary,
-                      tags: [...(Array.isArray(i.tags) ? i.tags : []), ...(Array.isArray(result.tags) ? result.tags : [])],
-                      videoMetadata: {
-                          title: result.title,
-                          summary: result.summary,
-                          moments: result.moments
-                      },
-                      isAnalyzing: false
-                  };
-                  upsertItem(updated);
-                  return updated;
-              }
-              return i;
-          }));
-      } catch (error: any) {
-          console.error("Video Analysis Failed", error);
-          showToast(`AI Video Error: ${error?.message || String(error)}`, "error");
-          bulkUpdateMetadata([id], { isAnalyzing: false });
-          throw error;
-      }
+      setVideoAnalysisQueue(prev => {
+          if (prev.some(q => q.id === id)) return prev;
+          return [...prev, { id, fileInfo: info!, rawMetadata: rawMetadata || '' }];
+      });
   };
 
   const generateVideoProxy = async (id: string, s3KeyOverride?: string) => {
