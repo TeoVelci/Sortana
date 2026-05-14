@@ -662,14 +662,18 @@ class RateLimiter {
       console.warn(`[RateLimiter] 429 Hit. Short pause. New delay: ${this.currentDelay}ms.`);
   }
 
-  private async process() {
-    if (this.isProcessing) return;
-    this.isProcessing = true;
+  private activeCount = 0;
+  private readonly MAX_CONCURRENT = 5;
 
-    while (this.highPriorityQueue.length > 0 || this.lowPriorityQueue.length > 0) {
+  private async process() {
+    if (this.activeCount >= this.MAX_CONCURRENT) return;
+
+    while ((this.highPriorityQueue.length > 0 || this.lowPriorityQueue.length > 0) && this.activeCount < this.MAX_CONCURRENT) {
       // 1. Check Pause State
       if (Date.now() < this.pausedUntil) {
           const waitTime = this.pausedUntil - Date.now();
+          // We don't want all concurrent tasks to sleep here synchronously blocking the loop if we can avoid it,
+          // but since it's a rate limit pause, we must respect it.
           await new Promise(r => setTimeout(r, waitTime));
       }
 
@@ -681,26 +685,30 @@ class RateLimiter {
         await new Promise(r => setTimeout(r, this.currentDelay - timeSinceLast));
       }
 
-      // 3. Execute Next Task - STRICT PRIORITY
-      // Always take high priority first
       const isHighPriority = this.highPriorityQueue.length > 0;
       const item = isHighPriority ? this.highPriorityQueue.shift() : this.lowPriorityQueue.shift();
 
       if (item) {
-        try {
-            this.lastCallTime = Date.now();
-            // Wrap the task in a race with a timeout (60s) to prevent infinite hanging
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out")), 60000));
-            const result = await Promise.race([item.task(), timeoutPromise]);
-            item.resolve(result);
-        } catch (e: any) {
-            item.reject(e);
-        }
+        this.activeCount++;
+        this.lastCallTime = Date.now();
+        
+        // Execute without awaiting the promise in the while loop so we can start more
+        (async () => {
+            try {
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out")), 60000));
+                const result = await Promise.race([item.task(), timeoutPromise]);
+                item.resolve(result);
+            } catch (e: any) {
+                item.reject(e);
+            } finally {
+                this.activeCount--;
+                this.process(); // Trigger next task
+            }
+        })();
       }
     }
-
-    this.isProcessing = false;
   }
+
 }
 
 // Global Limiter Instance

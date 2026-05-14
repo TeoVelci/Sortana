@@ -270,10 +270,11 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                         <VideoThumbnail item={item} />
                     ) : (
                         <div className="flex flex-col items-center gap-2 p-2 text-center overflow-hidden">
-                            <i className="fa-solid fa-film text-4xl text-gray-600 animate-pulse"></i>
-                            <span className="text-[8px] text-gray-500 font-bold uppercase truncate max-w-full">
-                                {item.syncStatus === 'uploading' ? 'Uploading...' : 
-                                 item.description ? item.description : 'Media Unavailable'}
+                            <i className={`fa-solid fa-film text-4xl ${item.syncStatus === 'error' ? 'text-red-500' : 'text-gray-600 animate-pulse'}`}></i>
+                            <span className={`text-[10px] font-bold ${item.syncStatus === 'error' ? 'text-red-400' : 'text-gray-400'}`}>
+                                {item.syncStatus === 'error' ? 'Upload Failed' : 
+                                 item.syncStatus === 'uploading' ? 'Uploading...' : 
+                                 item.isAnalyzing ? (item.analysisStatus || 'Analyzing...') : 'Processing...'}
                             </span>
                         </div>
                     )}
