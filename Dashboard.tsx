@@ -122,9 +122,8 @@ const Dashboard: React.FC = () => {
               type="file" 
               accept="image/*,video/*"
               multiple 
-              className="sr-only" 
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50" 
               onChange={onFileInputChange}
-              onClick={(e) => { (e.target as HTMLInputElement).value = ''; }}
             />
 
             {/* File List */}
