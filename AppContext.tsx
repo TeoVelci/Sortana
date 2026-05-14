@@ -730,7 +730,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           // No model found, still clear the analyzing flag and set a generic model
           const item = items.find(i => i.id === task.id);
           if (item) {
-            const updates: Partial<FileSystemItem> = { model: 'Sony Camera' };
+            const updates: Partial<FileSystemItem> = { model: 'Unknown' };
             if (!task.autoTagVideo) {
                 updates.isAnalyzing = false;
             }
@@ -741,7 +741,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } catch (err) {
         console.warn("Background AI metadata analysis failed", err);
         // Clear analyzing flag on error too
-        const updates: Partial<FileSystemItem> = { model: 'Sony Camera' };
+        const updates: Partial<FileSystemItem> = { model: 'Unknown' };
         if (!task.autoTagVideo) {
             updates.isAnalyzing = false;
         }
