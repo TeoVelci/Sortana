@@ -158,10 +158,8 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                     <div className="absolute top-2 left-3 w-[calc(100%-24px)] aspect-square bg-gray-400 dark:bg-dark-700 rounded-2xl border border-white/10 -rotate-1 z-0"></div>
             )}
 
-            {/* Square Box Wrapper (Fixes Safari Flex Percentage Padding Bug) */}
-            <div className="w-full shrink-0 mb-3 relative">
             {/* Square Box */}
-            <div className={`w-full pt-[100%] bg-gray-100 dark:bg-dark-900 rounded-2xl border transition-all relative overflow-hidden z-10 ${isSelected ? 'border-primary ring-2 ring-primary/50' : 'border-transparent dark:border-white/10 hover:border-primary/50'}`}>
+            <div className={`w-full aspect-square bg-gray-100 dark:bg-dark-900 rounded-2xl flex items-center justify-center p-1 mb-3 border transition-all relative overflow-hidden shrink-0 z-10 ${isSelected ? 'border-primary ring-2 ring-primary/50' : 'border-transparent dark:border-white/10 hover:border-primary/50'}`}>
             
             {/* Selection Checkmark */}
             <div className={`absolute top-2 left-2 z-30 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
@@ -235,7 +233,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
             )}
 
             {/* Content Preview */}
-            <div className="absolute inset-1 flex items-center justify-center">
+            <div className="w-full h-full flex items-center justify-center">
                 {item.type === 'folder' && (
                 <i className="fa-solid fa-folder text-6xl text-gray-400 group-hover:text-primary transition-colors"></i>
                 )}
@@ -267,7 +265,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                 )}
                 
                 {item.type === 'file' && item.fileType === 'video' && (
-                <div className="relative w-full h-full flex items-center justify-center bg-black min-h-0 min-w-0 rounded-xl overflow-hidden">
+                <div className="relative w-full h-full flex items-center justify-center bg-black">
                     {(item.proxyS3Key || item.s3Key) ? (
                         <VideoThumbnail item={item} />
                     ) : (
@@ -293,7 +291,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                 )}
             </div>
             </div>
-            </div>
+
 
             {/* Text Info */}
             <div className="text-center px-1">
