@@ -144,7 +144,7 @@ interface AppContextType {
 const INITIAL_USER: User = {
   username: 'New User',
   email: 'user@sortana.ai',
-  plan: 'Free' // Start on Free Tier
+  plan: 'Studio' // Start on Studio Tier for testing
 };
 
 const PLAN_LIMITS: Record<string, number> = {
@@ -156,7 +156,7 @@ const PLAN_LIMITS: Record<string, number> = {
 
 const INITIAL_STORAGE: StorageStats = {
   usedBytes: 0,
-  limitBytes: PLAN_LIMITS['Free']
+  limitBytes: PLAN_LIMITS['Studio']
 };
 
 // CLEAN SLATE: No ghost data
