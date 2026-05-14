@@ -122,7 +122,7 @@ const Dashboard: React.FC = () => {
             <input 
               ref={fileInputRef}
               type="file" 
-              accept="image/*,video/*,.heic,.heif,.mov,.mp4"
+              accept="image/*,video/*"
               multiple 
               className="sr-only" 
               onChange={onFileInputChange}
