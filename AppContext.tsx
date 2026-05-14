@@ -769,7 +769,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (i.id === task.id) {
                     const updated = {
                         ...i,
-                        name: result.title || i.name,
+                        name: i.name, // Keep original filename, do not overwrite with AI title
                         description: result.summary,
                         tags: [...(Array.isArray(i.tags) ? i.tags : []), ...(Array.isArray(result.tags) ? result.tags : [])],
                         videoMetadata: {
