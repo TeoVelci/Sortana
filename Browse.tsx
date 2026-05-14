@@ -265,7 +265,7 @@ const VirtualCell: React.FC<CellProps> = ({ columnIndex, rowIndex, style, data }
                 )}
                 
                 {item.type === 'file' && item.fileType === 'video' && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black">
+                <div className="relative w-full h-full flex items-center justify-center bg-black min-h-0 min-w-0 rounded-xl overflow-hidden">
                     {(item.proxyS3Key || item.s3Key) ? (
                         <VideoThumbnail item={item} />
                     ) : (
