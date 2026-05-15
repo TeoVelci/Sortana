@@ -361,7 +361,7 @@ const extractDetailedMetadata = async (file) => {
     }
 
     try {
-        const arrayBuffer = await file.slice(0, 64 * 1024).arrayBuffer();
+        const arrayBuffer = await file.slice(0, 2 * 1024 * 1024).arrayBuffer();
         const view = new DataView(arrayBuffer);
         const length = arrayBuffer.byteLength;
         let tiffStart = 0;
@@ -446,6 +446,16 @@ const extractDetailedMetadata = async (file) => {
         };
         parseIFD(ifd0Offset);
     } catch (e) {}
+
+    // Fallback for AirDropped/Transcoded images that strip EXIF Make/Model
+    if (!result.make && !result.model && ('name' in file)) {
+        const fileName = file.name.toUpperCase();
+        if (fileName.match(/^IMG_\d{4}\.(JPEG|JPG|HEIC)$/)) {
+            result.make = 'Apple';
+            result.model = 'iPhone';
+        }
+    }
+
     return result;
 };
 
