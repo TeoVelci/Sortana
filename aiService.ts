@@ -350,6 +350,16 @@ const extractDetailedMetadata = async (file) => {
     const result = { make: null, model: null, dateTaken: null, orientation: 1, rawMetadata: '' };
     if (file.lastModified) result.dateTaken = new Date(file.lastModified);
     
+    const applyAppleFallback = () => {
+        if (!result.make && !result.model && file.name) {
+            const fileName = file.name.toUpperCase();
+            if (fileName.includes('IMG_')) {
+                result.make = 'Apple';
+                result.model = 'iPhone';
+            }
+        }
+    };
+
     // Handle Video Files
     if (file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mp4') || file.name.toLowerCase().endsWith('.mov')) {
         const videoMeta = await extractMp4Metadata(file);
@@ -357,6 +367,7 @@ const extractDetailedMetadata = async (file) => {
         result.model = videoMeta.model;
         result.rawMetadata = videoMeta.rawMetadata;
         if (videoMeta.dateTaken) result.dateTaken = videoMeta.dateTaken;
+        applyAppleFallback();
         return result;
     }
 
@@ -447,14 +458,7 @@ const extractDetailedMetadata = async (file) => {
         parseIFD(ifd0Offset);
     } catch (e) {}
 
-    // Fallback for AirDropped/Transcoded images that strip EXIF Make/Model
-    if (!result.make && !result.model && ('name' in file)) {
-        const fileName = file.name.toUpperCase();
-        if (fileName.match(/^IMG_\d{4}\.(JPEG|JPG|HEIC)$/)) {
-            result.make = 'Apple';
-            result.model = 'iPhone';
-        }
-    }
+    applyAppleFallback();
 
     return result;
 };
