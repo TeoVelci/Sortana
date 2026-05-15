@@ -70,8 +70,8 @@ const extractDetailedMetadata = async (file: File | Blob) => {
     }
 
     try {
-        // Read first 64KB - usually sufficient for IFD0 and ExifIFD
-        const arrayBuffer = await file.slice(0, 64 * 1024).arrayBuffer();
+        // Read first 2MB - Apple JPEGs can have huge chunks (ICC, Depth maps) pushing EXIF string values very deep
+        const arrayBuffer = await file.slice(0, 2 * 1024 * 1024).arrayBuffer();
         const view = new DataView(arrayBuffer);
         const length = arrayBuffer.byteLength;
 
