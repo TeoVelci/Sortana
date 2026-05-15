@@ -189,6 +189,15 @@ const extractDetailedMetadata = async (file: File | Blob) => {
         // Silent fail is intentional for metadata extraction
     }
 
+    // Fallback for AirDropped/Transcoded images that strip EXIF Make/Model
+    if (!result.make && !result.model && ('name' in file)) {
+        const fileName = (file as File).name.toUpperCase();
+        if (fileName.match(/^IMG_\d{4}\.(JPEG|JPG|HEIC)$/)) {
+            result.make = 'Apple';
+            result.model = 'iPhone';
+        }
+    }
+
     return result;
 };
 

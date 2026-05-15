@@ -53,7 +53,7 @@ export const upsertItem = async (item: FileSystemItem) => {
     size: item.size,
     parent_id: item.parentId || null,
     s3_key: item.s3Key,
-    preview_url: item.previewUrl,
+    preview_url: item.previewUrl?.startsWith('blob:') ? null : item.previewUrl,
     tags: item.tags,
     description: item.description,
     rating: item.rating,
