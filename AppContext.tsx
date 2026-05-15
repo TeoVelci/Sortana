@@ -1057,7 +1057,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const isSony = make?.toLowerCase().includes('sony') || model?.toLowerCase().includes('sony') || rawMetadata?.toUpperCase().includes('SONY');
-      const needsAI = fType === 'video' && (!model || model.toLowerCase() === 'sony camera' || model.toLowerCase() === 'sony' || isSony);
+      const needsAI = fType === 'video' && isSony;
       const isGenericSony = model && (model.toUpperCase() === 'A7' || model.toUpperCase() === 'A9' || model.toUpperCase() === 'A1' || model.toUpperCase() === 'SONY' || model.toUpperCase() === 'SONY CAMERA' || model.toUpperCase() === 'ILCE-7' || model.toUpperCase() === 'ILCE-9' || model.toUpperCase() === 'ILCE-1');
       const effectiveModel = (needsAI && (!model || isGenericSony)) ? 'ANALYZING' : model;
 
