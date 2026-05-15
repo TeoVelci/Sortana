@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { S3Client, PutObjectCommand, GetObjectCommand } from "npm:@aws-sdk/client-s3"
 import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,6 +66,22 @@ serve(async (req) => {
 
     // Handle POST request for generating upload URLs
     if (req.method === 'POST') {
+      // Manually verify JWT since we will deploy with verify_jwt: false
+      const authHeader = req.headers.get('Authorization')
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: 'Unauthorized: Missing Authorization header' }), { status: 401, headers: corsHeaders })
+      }
+      
+      const token = authHeader.replace('Bearer ', '')
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
+      const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY') || ''
+      const supabase = createClient(supabaseUrl, supabaseKey)
+      
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+      if (authError || !user) {
+         return new Response(JSON.stringify({ error: 'Unauthorized: Invalid token' }), { status: 401, headers: corsHeaders })
+      }
+
       const { filename, filetype } = await req.json()
       
       if (!filename || !filetype) {
