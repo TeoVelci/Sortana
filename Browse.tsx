@@ -223,9 +223,9 @@ const ItemCell: React.FC<{ item: FileSystemItem, data: any }> = ({ item, data })
                 <i className="fa-solid fa-folder text-6xl text-gray-400 group-hover:text-primary transition-colors"></i>
                 )}
                 {item.type === 'file' && (item.fileType === 'image' || item.fileType === 'raw') && (
-                (item.thumbnailUrl || item.previewUrl) ? 
+                (item.thumbnailUrl || item.previewUrl || item.s3Key) ? 
                 <img 
-                    src={item.thumbnailUrl || item.previewUrl} 
+                    src={item.thumbnailUrl || item.previewUrl || (item.s3Key ? getPublicUrl(item.s3Key) : undefined)} 
                     alt={item.name} 
                     className="w-full h-auto object-contain rounded-lg"
                     loading="lazy"

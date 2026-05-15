@@ -1166,8 +1166,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               bulkUpdateMetadata([id], {
                   syncStatus: 'synced',
                   s3Key: key,
-                  previewUrl: finalPreviewUrl,
-                  thumbnailUrl: finalThumbnailUrl
+                  previewUrl: finalPreviewUrl?.startsWith('blob:') ? null : finalPreviewUrl,
+                  thumbnailUrl: finalThumbnailUrl?.startsWith('blob:') ? null : finalThumbnailUrl
               });
 
               // TRIGGER PROXY GENERATION AFTER UPLOAD SUCCESS
