@@ -677,7 +677,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
         const aiMeta = await analyzeVideoMetadata(task.rawMetadata);
         if (aiMeta && aiMeta.model) {
-          const item = items.find(i => i.id === task.id);
+          const item = itemsRef.current.find(i => i.id === task.id);
           if (item) {
             const make = aiMeta.make || 'Sony';
             const model = aiMeta.model;
@@ -728,7 +728,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         } else {
           // No model found, still clear the analyzing flag and set a generic model
-          const item = items.find(i => i.id === task.id);
+          const item = itemsRef.current.find(i => i.id === task.id);
           if (item) {
             const updates: Partial<FileSystemItem> = { model: 'Unknown' };
             if (!task.autoTagVideo) {
