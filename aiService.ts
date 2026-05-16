@@ -814,7 +814,7 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 export const analyzeVideoMetadata = async (rawMetadata: string): Promise<{ make: string | null, model: string | null }> => {
     try {
         const ai = getAI();
-        const response = await ai.models.generateContent({
+        const response = await callAIWithRetry(() => ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: `Analyze the following raw video file metadata and extract the camera make and model, or the source application/device.
             
@@ -835,7 +835,7 @@ export const analyzeVideoMetadata = async (rawMetadata: string): Promise<{ make:
             config: {
                 responseMimeType: "application/json"
             }
-        });
+        }), 3, 'low');
 
         const result = parseJSONResponse(response.text);
         return {

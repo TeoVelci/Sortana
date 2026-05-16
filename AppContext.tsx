@@ -677,18 +677,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       
       try {
         const aiMeta = await analyzeVideoMetadata(task.rawMetadata);
-        if (aiMeta && aiMeta.model) {
-          const item = itemsRef.current.find(i => i.id === task.id);
-          if (item) {
-            const make = aiMeta.make || 'Sony';
-            const model = aiMeta.model;
+        
+        const item = itemsRef.current.find(i => i.id === task.id);
+        if (item) {
+            const make = aiMeta?.make || 'Unknown';
+            const model = aiMeta?.model || 'Unknown';
             const friendlyCamera = getFriendlyCameraName(make, model);
             
             const updates: Partial<FileSystemItem> = { make, model };
             if (!task.autoTagVideo) {
                 updates.isAnalyzing = false;
             }
-            // If smart sort is enabled, we might need to move the file
+            
+            // If smart sort is enabled, we MUST move the file out of 'Analyzing Camera...'
             if (task.useSmartSort) {
               const dateTaken = item.dateTaken ? new Date(item.dateTaken) : new Date();
               const dateStr = dateTaken.toISOString().split('T')[0];
@@ -744,23 +745,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               });
               return latestItems;
             });
-          }
-        } else {
-          // No model found, still clear the analyzing flag and set a generic model
-          const item = itemsRef.current.find(i => i.id === task.id);
-          if (item) {
-            const updates: Partial<FileSystemItem> = { model: 'Unknown' };
-            if (!task.autoTagVideo) {
-                updates.isAnalyzing = false;
-            }
-            // bulkUpdateMetadata handles both local state and upsert
-            bulkUpdateMetadata([task.id], updates);
-          }
         }
       } catch (err) {
         console.warn("Background AI metadata analysis failed", err);
-        // Clear analyzing flag on error too
-        const updates: Partial<FileSystemItem> = { model: 'Unknown' };
+        // Clear analyzing flag on error too, but keep it in the current folder if it threw a hard error
+        const updates: Partial<FileSystemItem> = { model: 'Unknown', make: 'Unknown' };
         if (!task.autoTagVideo) {
             updates.isAnalyzing = false;
         }
@@ -976,6 +965,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const newItems: FileSystemItem[] = [];
     const imagesToQueue: BatchItem[] = [];
+    const videoMetadataTasksToQueue: { id: string, rawMetadata: string, useSmartSort: boolean, rootFolderId: string, autoTagVideo?: boolean }[] = [];
+    const videoAnalysisTasksToQueue: { id: string, fileInfo: { name: string, type: string }, rawMetadata: string }[] = [];
     const folderMap = new Map<string, string>();
 
     // 1. Identify sidecar XML files and Ghost iOS JPEGs
@@ -1075,8 +1066,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           console.warn(`Pre-process failed for ${f.name}`, e);
       }
 
+      const canAnalyze = Boolean(rawMetadata && rawMetadata.length > 50);
       const isSony = make?.toLowerCase().includes('sony') || model?.toLowerCase().includes('sony') || rawMetadata?.toUpperCase().includes('SONY');
-      const needsAI = fType === 'video' && isSony;
+      const needsAI = fType === 'video' && isSony && canAnalyze;
       const isGenericSony = model && (model.toUpperCase() === 'A7' || model.toUpperCase() === 'A9' || model.toUpperCase() === 'A1' || model.toUpperCase() === 'SONY' || model.toUpperCase() === 'SONY CAMERA' || model.toUpperCase() === 'ILCE-7' || model.toUpperCase() === 'ILCE-9' || model.toUpperCase() === 'ILCE-1');
       const effectiveModel = (needsAI && (!model || isGenericSony)) ? 'ANALYZING' : model;
 
@@ -1092,6 +1084,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const autoTagVideo = fType === 'video';
+      
+      let finalIsAnalyzing = shouldAnalyze || autoTagVideo;
+      
+      if (needsAI) {
+          if (!rawMetadata || rawMetadata.length <= 50) {
+              if (!autoTagVideo) {
+                  finalIsAnalyzing = false;
+              }
+          }
+      }
 
       const newItem: FileSystemItem = {
         id,
@@ -1107,7 +1109,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         rating: 0,
         flag: null,
         tags: [projectTag], 
-        isAnalyzing: shouldAnalyze || autoTagVideo,
+        isAnalyzing: finalIsAnalyzing,
         make,
         model: effectiveModel,
         syncStatus: 'uploading' // Start as uploading
@@ -1118,15 +1120,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       // Queue for AI analysis if it's a video
       // CRITICAL: Always queue Sony videos for AI analysis to ensure accurate model identification (e.g. A7 IV vs A790)
-      if (needsAI) {
-          if (rawMetadata && rawMetadata.length > 50) {
-              setVideoMetadataQueue(prev => [...prev, { id, rawMetadata: rawMetadata!, useSmartSort, rootFolderId, autoTagVideo }]);
-          } else {
-              // Not enough metadata to analyze. Clear the flag immediately, unless it's waiting for video AI.
-              if (!autoTagVideo) {
-                  bulkUpdateMetadata([id], { isAnalyzing: false });
-              }
-          }
+      if (needsAI && rawMetadata && rawMetadata.length > 50) {
+          videoMetadataTasksToQueue.push({ id, rawMetadata: rawMetadata!, useSmartSort, rootFolderId, autoTagVideo });
       }
 
       if (shouldAnalyze) {
@@ -1134,10 +1129,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       if (autoTagVideo) {
-          // Fire and forget auto tagging
-          setTimeout(() => {
-              analyzeVideoItem(id, { name: f.name, type: fType === 'video' ? 'video/mp4' : f.type }, rawMetadata).catch(e => console.error("Auto video analysis failed:", e));
-          }, 0);
+          videoAnalysisTasksToQueue.push({ id, fileInfo: { name: f.name, type: fType === 'video' ? 'video/mp4' : f.type }, rawMetadata: rawMetadata || "" });
       }
 
       if (fType === 'video') {
@@ -1276,6 +1268,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setItems(prev => [...prev, ...newItems]);
     if (imagesToQueue.length > 0) {
         setAnalysisQueue(prev => [...prev, ...imagesToQueue]);
+    }
+    if (videoMetadataTasksToQueue.length > 0) {
+        setVideoMetadataQueue(prev => [...prev, ...videoMetadataTasksToQueue]);
+    }
+    if (videoAnalysisTasksToQueue.length > 0) {
+        setVideoAnalysisQueue(prev => [...prev, ...videoAnalysisTasksToQueue]);
     }
   };
 
