@@ -6,12 +6,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import AutoOrganizeModal from './AutoOrganizeModal';
 
 const Dashboard: React.FC = () => {
-  const { uploadFiles, storage, recentActivity, getStoragePercentage, formatSize, user } = useApp();
+  const { uploadFiles, storage, recentActivity, getStoragePercentage, formatSize, user, isVideoMetadataQueueActive } = useApp();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
   const [filesToUpload, setFilesToUpload] = useState<File[]>([]);
   const [projectTag, setProjectTag] = useState('');
+  const [isWaitingForAI, setIsWaitingForAI] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'complete'>('idle');
   const [progress, setProgress] = useState(0);
@@ -62,6 +63,7 @@ const Dashboard: React.FC = () => {
     }
 
     setUploadStatus('uploading');
+    setIsWaitingForAI(false);
     
     // Simulate Upload Progress
     let p = 0;
@@ -77,19 +79,25 @@ const Dashboard: React.FC = () => {
     setTimeout(async () => {
       try {
           await uploadFiles(filesToUpload, projectTag, useSmartSort);
-          setUploadStatus('complete');
-          setFilesToUpload([]);
-          setProjectTag('');
-          showToast(useSmartSort ? 'Files uploaded & smartly organized!' : 'Files uploaded successfully!', 'success');
-          
-          // Auto-redirect to browse after short delay (optional UX choice)
-          // setTimeout(() => navigate('/browse'), 1500); 
+          // Instead of instantly completing, wait for AI queue if active
+          setIsWaitingForAI(true);
       } catch (error: any) {
           setUploadStatus('idle'); // Reset status on failure
+          setIsWaitingForAI(false);
           showToast(error.message || "Upload failed. Storage limit reached?", 'error');
       }
     }, 2000);
   };
+
+  useEffect(() => {
+    if (isWaitingForAI && !isVideoMetadataQueueActive) {
+        setIsWaitingForAI(false);
+        setUploadStatus('complete');
+        setFilesToUpload([]);
+        setProjectTag('');
+        showToast(useSmartSort ? 'Files uploaded & smartly organized!' : 'Files uploaded successfully!', 'success');
+    }
+  }, [isWaitingForAI, isVideoMetadataQueueActive, useSmartSort]);
 
   const storagePercent = getStoragePercentage();
 
@@ -234,12 +242,14 @@ const Dashboard: React.FC = () => {
                   <div className="flex justify-between text-sm mb-2 items-center">
                     <div className="flex gap-1">
                       <span className="text-gray-900 dark:text-white font-bold">Status:</span> 
-                      <span className="text-gray-500 dark:text-gray-400">{uploadStatus === 'complete' ? 'Done' : 'Uploading...'}</span>
+                      <span className="text-gray-500 dark:text-gray-400">
+                        {uploadStatus === 'complete' ? 'Done' : (isWaitingForAI ? 'Analyzing AI...' : 'Uploading...')}
+                      </span>
                     </div>
                     <span className="text-gray-500 text-xs">{progress}%</span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-dark-700 rounded-full h-2">
-                    <div className="bg-primary h-2 rounded-full" style={{ width: `${progress}%` }}></div>
+                    <div className={`h-2 rounded-full ${isWaitingForAI ? 'bg-indigo-500 animate-pulse' : 'bg-primary'}`} style={{ width: `${progress}%` }}></div>
                   </div>
                 </div>
               </div>

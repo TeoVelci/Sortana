@@ -137,6 +137,7 @@ interface AppContextType {
   // Queue Status
   queueStatus: 'idle' | 'processing' | 'paused';
   syncQueue: FileSystemItem[];
+  isVideoMetadataQueueActive: boolean;
 }
 
 // --- Initial Mock Data ---
@@ -1590,7 +1591,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       getFileObject,
       retryUpload,
       queueStatus,
-      syncQueue
+      syncQueue,
+      isVideoMetadataQueueActive: videoMetadataQueue.length > 0 || isProcessingVideoQueue
     }}>
       {children}
     </AppContext.Provider>
