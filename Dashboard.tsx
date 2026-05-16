@@ -123,7 +123,7 @@ const Dashboard: React.FC = () => {
               id="file-upload"
               ref={fileInputRef}
               type="file" 
-              accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/*"
+              accept="image/*,video/*"
               multiple 
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50" 
               onChange={onFileInputChange}
