@@ -29,6 +29,8 @@ const Dashboard: React.FC = () => {
     if (!fileList) return;
     const fileArray = Array.from(fileList);
     setFilesToUpload(prev => [...prev, ...fileArray]);
+    setUploadStatus('idle'); // Reset status if user adds more files
+    setProgress(0);
     if (fileArray.length > 0) {
         showToast(`${fileArray.length} files added to queue`, 'info');
     }
@@ -52,8 +54,8 @@ const Dashboard: React.FC = () => {
 
   const onFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     handleFiles(e.target.files);
+    e.target.value = ''; // Reset input so same files can be re-selected
   };
-
 
   const startUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +98,12 @@ const Dashboard: React.FC = () => {
         setFilesToUpload([]);
         setProjectTag('');
         showToast(useSmartSort ? 'Files uploaded & smartly organized!' : 'Files uploaded successfully!', 'success');
+        
+        // Auto-reset back to idle after a few seconds so the user can upload again cleanly
+        setTimeout(() => {
+            setUploadStatus(prev => prev === 'complete' ? 'idle' : prev);
+            setProgress(0);
+        }, 3000);
     }
   }, [isWaitingForAI, isVideoMetadataQueueActive, useSmartSort]);
 
