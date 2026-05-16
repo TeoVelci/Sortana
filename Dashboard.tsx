@@ -116,7 +116,7 @@ const Dashboard: React.FC = () => {
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">Drag & Drop Media Here</h2>
             <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">or click to browse photos & videos up to 10GB</p>
             <p className="text-xs text-primary/80 dark:text-primary/60 max-w-sm mt-1 mb-4 md:hidden">
-              Note: iOS may pause after clicking "Add" to download iCloud media.
+              Pro Tip: Selecting from "Photo Library" may cause a long delay while iOS processes images. Tap "Choose Files" instead for instant uploads!
             </p>
 
             <input 
