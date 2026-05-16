@@ -701,15 +701,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const oldParentId = item.parentId;
                 updates.parentId = newParentId;
                 
-                // Cleanup old folder if it's now empty
+                // Cleanup old folder and its parent if they are now empty
                 setTimeout(() => {
                   setItems(prev => {
-                    const folderItems = prev.filter(i => i.parentId === oldParentId && i.id !== task.id);
-                    if (folderItems.length === 0) {
-                      // It's empty, remove it
-                      return prev.filter(i => i.id !== oldParentId);
+                    let nextState = [...prev];
+                    let currentFolderIdToCheck: string | null = oldParentId;
+                    const idsToDelete = new Set<string>();
+
+                    while (currentFolderIdToCheck) {
+                        const folderId = currentFolderIdToCheck; // capture for closure
+                        const folderItems = nextState.filter(i => i.parentId === folderId && i.id !== task.id && !idsToDelete.has(i.id));
+                        
+                        if (folderItems.length === 0) {
+                            idsToDelete.add(folderId);
+                            const folderObj = nextState.find(i => i.id === folderId);
+                            currentFolderIdToCheck = folderObj ? folderObj.parentId : null;
+                        } else {
+                            currentFolderIdToCheck = null; // stop traversing up
+                        }
                     }
-                    return prev;
+
+                    if (idsToDelete.size > 0) {
+                        idsToDelete.forEach(id => {
+                           deleteItemFromSupabase(id); // Actual DB delete
+                        });
+                        nextState = nextState.filter(i => !idsToDelete.has(i.id));
+                    }
+                    return nextState;
                   });
                 }, 100);
               }
@@ -1193,8 +1211,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               console.error(`Upload failed for ${f.name}`, error);
               const errorMsg = error.message || 'Unknown error';
               showToast(`Failed to upload ${f.name}: ${errorMsg}`, 'error');
-              setItems(prev => prev.map(i => i.id === id ? { ...i, syncStatus: 'error', description: `Upload failed: ${errorMsg}` } : i));
-              upsertItem({ ...newItem, syncStatus: 'error', description: `Upload failed: ${errorMsg}` });
+              bulkUpdateMetadata([id], {
+                  syncStatus: 'error',
+                  description: `Upload failed: ${errorMsg}`
+              });
           }
       });
     }
