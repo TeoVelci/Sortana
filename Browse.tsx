@@ -125,7 +125,7 @@ const ItemCell: React.FC<{ item: FileSystemItem, data: any }> = ({ item, data })
 
     return (
         <div 
-            className={`group cursor-pointer relative flex flex-col transition-transform duration-200 ${isSelected ? 'bg-indigo-50/50 dark:bg-primary/5 scale-95' : 'hover:bg-gray-50 dark:hover:bg-white/5 hover:scale-[1.02]'} p-2 rounded-2xl`}
+            className={`group cursor-pointer relative flex flex-col min-w-0 transition-transform duration-200 ${isSelected ? 'bg-indigo-50/50 dark:bg-primary/5 scale-95' : 'hover:bg-gray-50 dark:hover:bg-white/5 hover:scale-[1.02]'} p-2 rounded-2xl`}
             onClick={(e) => { e.stopPropagation(); onItemClick(e, item); }}
             onDoubleClick={(e) => { e.stopPropagation(); onItemDoubleClick(e, item); }}
             draggable
@@ -1139,6 +1139,10 @@ const Browse: React.FC = () => {
                        <div className="flex flex-col gap-6">
                             {/* ... (Standard Image/Video Preview logic from prev) ... */}
                             <div className="aspect-square bg-gray-100 dark:bg-dark-900 rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 flex items-center justify-center relative group">
+                              {/* FOLDER PREVIEW */}
+                              {activeItem.type === 'folder' && (
+                                  <i className="fa-solid fa-folder text-6xl text-gray-400"></i>
+                              )}
                               {/* IMAGE PREVIEW */}
                               {activeItem.fileType === 'image' && activeItem.previewUrl && (
                                   <img src={activeItem.previewUrl} className="w-full h-full object-contain" />
