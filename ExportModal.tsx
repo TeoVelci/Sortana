@@ -40,6 +40,8 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
+  const supportsDirectToDisk = 'showSaveFilePicker' in window;
+  const [directToDisk, setDirectToDisk] = useState(supportsDirectToDisk);
 
   // Enforce restrictions when plan changes (via debug tool) or on load
   useEffect(() => {
@@ -94,7 +96,7 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
       };
 
       try {
-          if ('showSaveFilePicker' in window) {
+          if (directToDisk && supportsDirectToDisk) {
               const response = await generateStreamingZip(files, items, options, (p, name) => {
                   setProgress(p);
                   setStatusText(p === 100 ? "Zipping..." : `Processing: ${name}`);
@@ -248,6 +250,27 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
                                     Flatten
                                 </button>
                             </div>
+                        </div>
+
+                        {/* Direct to Disk Option */}
+                        <div className={`transition-opacity ${!supportsDirectToDisk ? 'opacity-50 relative' : ''}`}>
+                            <label className="block text-xs font-medium text-gray-500 mb-2 flex justify-between">
+                                <span>Direct to Disk Streaming</span>
+                                {!supportsDirectToDisk && <span className="text-gray-400 font-bold text-[10px]">CHROME/EDGE ONLY</span>}
+                            </label>
+                            <label className={`relative flex items-center ${supportsDirectToDisk ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={directToDisk} 
+                                    onChange={(e) => setDirectToDisk(e.target.checked)} 
+                                    disabled={!supportsDirectToDisk}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-dark-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-white/10 peer-checked:bg-primary"></div>
+                                <span className="ml-3 text-xs font-medium text-gray-700 dark:text-gray-300">
+                                    Stream save (prevents crashes)
+                                </span>
+                            </label>
                         </div>
                     </div>
                 </section>
