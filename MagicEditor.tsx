@@ -249,20 +249,31 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
                         <span className="hidden md:inline">{isVideo ? 'Deep AI Analysis' : 'Generate'}</span>
                     </button>
 
-                    {generatedImage && (
-                        <div className="w-px h-12 bg-white/10 mx-2 shrink-0"></div>
-                    )}
+                    <div className="w-px h-12 bg-white/10 mx-2 shrink-0 hidden md:block"></div>
 
-                    {generatedImage && (
-                        <button 
-                            id="magic-btn-save"
-                            onClick={handleSave}
-                            className="bg-white text-dark-900 hover:bg-gray-200 p-3 md:px-6 md:py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shrink-0 aspect-square md:aspect-auto"
-                        >
-                            <i className="fa-solid fa-floppy-disk"></i>
-                            <span className="hidden md:inline">Save Copy</span>
-                        </button>
-                    )}
+                    <button 
+                        id="magic-btn-reset"
+                        onClick={() => {
+                            setGeneratedImage(null);
+                            setPrompt('');
+                        }}
+                        disabled={!generatedImage}
+                        className="bg-dark-700 text-white hover:bg-dark-600 disabled:opacity-50 disabled:cursor-not-allowed p-3 md:px-6 md:py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shrink-0 aspect-square md:aspect-auto"
+                        title="Discard Edit"
+                    >
+                        <i className="fa-solid fa-rotate-left"></i>
+                        <span className="hidden md:inline">Reset</span>
+                    </button>
+
+                    <button 
+                        id="magic-btn-save"
+                        onClick={handleSave}
+                        disabled={!generatedImage}
+                        className="bg-white text-dark-900 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed p-3 md:px-6 md:py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shrink-0 aspect-square md:aspect-auto"
+                    >
+                        <i className="fa-solid fa-floppy-disk"></i>
+                        <span className="hidden md:inline">Save Copy</span>
+                    </button>
                 </div>
             </div>
         </div>

@@ -144,6 +144,11 @@ const TOURS: Record<TourId, TourStep[]> = {
       content: 'Tap the wand icon to apply your changes using AI.',
     },
     {
+      targetId: 'magic-btn-reset',
+      title: 'Reset Edit',
+      content: 'Tap the undo icon to discard your generation and start over.',
+    },
+    {
       targetId: 'magic-btn-save',
       title: 'Save Copy',
       content: 'Tap the floppy disk to save your new edited image.',
@@ -159,6 +164,11 @@ const TOURS: Record<TourId, TourStep[]> = {
       targetId: 'magic-btn-generate',
       title: 'Generate',
       content: 'Click here to apply your changes using AI.',
+    },
+    {
+      targetId: 'magic-btn-reset',
+      title: 'Reset Edit',
+      content: 'Click here to discard your generation and start over.',
     },
     {
       targetId: 'magic-btn-save',
