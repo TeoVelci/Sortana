@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useApp, FileSystemItem } from './AppContext';
-import { generateExportZip, ExportOptions } from './exportService';
+import { generateStreamingZip, generateChunkedExportZip, ExportOptions } from './exportService';
 import { useToast } from './ToastContext';
 
 interface ExportModalProps {
@@ -11,80 +10,73 @@ interface ExportModalProps {
 }
 
 const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItems }) => {
-  const { items, user } = useApp(); // Need all items for folder structure
+  const { items, user } = useApp();
   const { showToast } = useToast();
 
-  // Feature Gating Logic
   const isProOrAbove = ['Pro', 'Studio'].includes(user.plan);
   const isStudio = user.plan === 'Studio';
 
-  // Determine what we are exporting
   const effectiveItems = selectedItems.length > 0 
     ? selectedItems 
     : items.filter(i => i.type === 'file'); 
 
-  // State
-  const [format, setFormat] = useState<'original' | 'jpg' | 'png'>('original');
-  const [pattern, setPattern] = useState<'original' | 'sequence'>('original');
-  const [baseName, setBaseName] = useState('My_Project');
-  const [structure, setStructure] = useState<'preserve' | 'flat'>('preserve');
-  const [includeXmp, setIncludeXmp] = useState(false);
-  
-  // Watermark State
-  const [watermarkEnabled, setWatermarkEnabled] = useState(false);
-  const [watermarkText, setWatermarkText] = useState('© Sortana User');
-  const [watermarkOpacity, setWatermarkOpacity] = useState(0.8);
-  const [watermarkPos, setWatermarkPos] = useState<'bottom-right' | 'bottom-left' | 'center'>('bottom-right');
+  const getFilesToExport = (): FileSystemItem[] => {
+      let filesToExport: FileSystemItem[] = [];
+      const gather = (itemList: FileSystemItem[]) => {
+          for (const item of itemList) {
+              if (item.type === 'file') {
+                  filesToExport.push(item);
+              } else if (item.type === 'folder') {
+                  const children = items.filter(i => i.parentId === item.id);
+                  gather(children);
+              }
+          }
+      };
+      gather(effectiveItems);
+      return Array.from(new Set(filesToExport));
+  };
 
-  // Progress
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
 
-  // Enforce restrictions when plan changes (via debug tool) or on load
-  useEffect(() => {
-    if (!isProOrAbove) {
-        setFormat('original');
-        setPattern('original');
-        setIncludeXmp(false);
-    }
-    if (!isStudio) {
-        setWatermarkEnabled(false);
-    }
-  }, [user.plan, isProOrAbove, isStudio]);
+  const [pattern, setPattern] = useState<'original'|'sequence'>('original');
+  const [baseName, setBaseName] = useState('Export');
+  const [format, setFormat] = useState<'original'|'jpg'|'png'>('original');
+  const [structure, setStructure] = useState<'preserve'|'flat'>('preserve');
+  const [includeXmp, setIncludeXmp] = useState(isProOrAbove);
+  const [watermarkEnabled, setWatermarkEnabled] = useState(false);
+  const [watermarkText, setWatermarkText] = useState('');
+  const [watermarkOpacity, setWatermarkOpacity] = useState(0.8);
+  const [watermarkPos, setWatermarkPos] = useState<'bottom-right'|'bottom-left'|'center'>('bottom-right');
 
-  // Count files recursively (if folders selected)
-  const getFilesToExport = () => {
-      const files: FileSystemItem[] = [];
-      const traverse = (itemList: FileSystemItem[]) => {
-          itemList.forEach(item => {
-              if (item.type === 'file') files.push(item);
-              if (item.type === 'folder') {
-                  const children = items.filter(c => (c.parentId || null) === (item.id || null));
-                  traverse(children);
-              }
-          });
-      };
-      traverse(selectedItems.length > 0 ? selectedItems : items.filter(i => !i.parentId && i.type === 'file'));
-      return files;
-  };
+  useEffect(() => {
+      if (!isProOrAbove) {
+          setPattern('original');
+          setIncludeXmp(false);
+      }
+      if (!isStudio) {
+          setWatermarkEnabled(false);
+      }
+  }, [isProOrAbove, isStudio]);
 
   const handleExport = async () => {
       const files = getFilesToExport();
       if (files.length === 0) {
-          showToast("No files to export", "error");
+          showToast("No files selected to export.", "error");
           return;
       }
 
       setIsExporting(true);
       setProgress(0);
+      setStatusText("Initializing...");
 
       const options: ExportOptions = {
           fileNamePattern: pattern,
-          baseName: baseName,
-          format: format,
-          structure: structure,
-          includeXmp: includeXmp,
+          baseName: pattern === 'sequence' ? baseName : undefined,
+          format,
+          structure,
+          includeXmp,
           watermark: {
               enabled: watermarkEnabled,
               text: watermarkText,
@@ -94,23 +86,64 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
       };
 
       try {
-          const blob = await generateExportZip(files, items, options, (p, name) => {
+          const onProgress = (p: number, name: string) => {
               setProgress(p);
               setStatusText(p === 100 ? "Zipping..." : `Processing: ${name}`);
-          });
+          };
 
-          // Trigger Download
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `Sortana_Export_${Date.now()}.zip`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-
-          showToast("Export complete!", "success");
-          onClose();
+          if ('showSaveFilePicker' in window) {
+              try {
+                  const fileHandle = await (window as any).showSaveFilePicker({
+                      suggestedName: `Sortana_Export_${Date.now()}.zip`,
+                      types: [{
+                          description: 'ZIP Archive',
+                          accept: { 'application/zip': ['.zip'] },
+                      }],
+                  });
+                  
+                  const writable = await fileHandle.createWritable();
+                  const response = generateStreamingZip(files, items, options, onProgress);
+                  if (!response.body) throw new Error("Failed to generate zip stream");
+                  await response.body.pipeTo(writable);
+                  
+                  showToast("Export complete!", "success");
+                  onClose();
+              } catch (err: any) {
+                  if (err.name === 'AbortError') {
+                      showToast("Export cancelled.", "error");
+                  } else {
+                      throw err;
+                  }
+              }
+          } 
+          else {
+              const blobs = await generateChunkedExportZip(files, items, options, onProgress);
+              
+              if (blobs.length === 1) {
+                  const url = URL.createObjectURL(blobs[0]);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `Sortana_Export_${Date.now()}.zip`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+              } else {
+                  blobs.forEach((blob, idx) => {
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `Sortana_Export_${Date.now()}_Part${idx + 1}.zip`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                  });
+                  showToast(`Export complete. Downloaded ${blobs.length} parts.`, "success");
+              }
+              showToast("Export complete!", "success");
+              onClose();
+          }
       } catch (e) {
           console.error(e);
           showToast("Export failed.", "error");
