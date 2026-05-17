@@ -98,8 +98,7 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
           
           // Construct new name
           const namePart = item.name.substring(0, item.name.lastIndexOf('.')) || item.name;
-          const ext = item.name.split('.').pop() || 'jpg';
-          const newName = `${namePart}_AI_Edit.${ext}`;
+          const newName = `${namePart}_AI_Edit.png`;
           
           onSave(blob, newName);
           onClose();
