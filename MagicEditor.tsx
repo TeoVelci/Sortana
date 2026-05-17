@@ -106,7 +106,7 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
         </div>
 
         {/* --- Main Canvas --- */}
-        <div className="flex-1 relative flex items-center justify-center p-6 overflow-hidden">
+        <div className="flex-1 relative flex items-center justify-center p-6 overflow-hidden min-h-0">
             
             {/* Background Pattern */}
             <div className="absolute inset-0 opacity-20 pointer-events-none" 
@@ -115,34 +115,38 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
 
             {/* Image Container */}
             <div 
-                className="relative max-w-full max-h-full shadow-2xl rounded-lg overflow-hidden border border-white/10 group select-none"
+                className="relative max-w-full max-h-full shadow-2xl rounded-lg overflow-hidden border border-white/10 group select-none grid"
                 onContextMenu={(e) => e.preventDefault()}
             >
                 {/* Original Content (Always underneath) */}
-                {isVideo ? (
-                    <div className="relative flex justify-center items-center h-full w-full bg-black">
-                        <video 
-                            src={directAwsUrl || undefined}
-                            controls
-                            className="max-w-full max-h-[calc(100vh-280px)] object-contain bg-black"
-                            playsInline
+                <div className="col-start-1 row-start-1 flex items-center justify-center">
+                    {isVideo ? (
+                        <div className="relative flex justify-center items-center h-full w-full bg-black">
+                            <video 
+                                src={directAwsUrl || undefined}
+                                controls
+                                className="max-w-full max-h-[calc(100dvh-280px)] object-contain bg-black"
+                                playsInline
+                            />
+                        </div>
+                    ) : (
+                        <img 
+                            src={item.previewUrl} 
+                            alt="Original" 
+                            className="max-w-full max-h-[calc(100dvh-280px)] object-contain"
                         />
-                    </div>
-                ) : (
-                    <img 
-                        src={item.previewUrl} 
-                        alt="Original" 
-                        className="max-w-full max-h-[calc(100vh-280px)] object-contain"
-                    />
-                )}
+                    )}
+                </div>
                 
                 {/* Generated Image (On top, toggled by isComparing) */}
                 {generatedImage && (
-                    <img 
-                        src={generatedImage} 
-                        alt="Edited" 
-                        className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-100 ${isComparing ? 'opacity-0' : 'opacity-100'}`}
-                    />
+                    <div className="col-start-1 row-start-1 flex items-center justify-center z-10 pointer-events-none">
+                        <img 
+                            src={generatedImage} 
+                            alt="Edited" 
+                            className={`max-w-full max-h-[calc(100dvh-280px)] object-contain transition-opacity duration-100 ${isComparing ? 'opacity-0' : 'opacity-100'}`}
+                        />
+                    </div>
                 )}
                 
                 {/* Compare Badge */}
