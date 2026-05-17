@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { getFileFromDB } from './dbService';
 import { FileSystemItem } from './AppContext';
 import { processFileForDisplay } from './aiService';
+import { downloadFileFromS3 } from './storageService';
 
 export interface ExportOptions {
     fileNamePattern: 'original' | 'sequence';
@@ -129,12 +130,7 @@ const createXMP = (item: FileSystemItem): string => {
  */
 const fetchFromS3 = async (key: string): Promise<Blob | null> => {
     try {
-        const urlRes = await fetch(`/api/file-url?key=${encodeURIComponent(key)}`);
-        if (!urlRes.ok) return null;
-        const { url } = await urlRes.json();
-        const fileRes = await fetch(url);
-        if (!fileRes.ok) return null;
-        return await fileRes.blob();
+        return await downloadFileFromS3(key);
     } catch (e) {
         console.error(`S3 Fetch failed for key: ${key}`, e);
         return null;
