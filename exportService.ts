@@ -139,22 +139,22 @@ const fetchFromS3 = async (key: string): Promise<Blob | null> => {
 };
 
 /**
- * Main Export Logic - Streaming (Chrome/Edge/Brave via client-zip)
- * Streams files one by one with almost 0 memory overhead.
+ * Main Export Logic
  */
-export const generateStreamingZip = (
+export const generateChunkedZips = async (
     itemsToExport: FileSystemItem[], 
-    allItems: FileSystemItem[],
+    allItems: FileSystemItem[], 
     options: ExportOptions,
     onProgress?: (percent: number, currentFile: string) => void
-): Response => {
+): Promise<Blob[]> => {
+    
+    let filesAdded = 0;
+    const CONCURRENCY_LIMIT = 3;
+    const MAX_RETRIES = 5;
+    const MAX_ZIP_SIZE = 300 * 1024 * 1024; // 300MB chunk size
     
     const files = itemsToExport.filter(i => i.type === 'file');
     if (files.length === 0) throw new Error("No files to export");
-
-    const usedNames = new Set<string>();
-    let filesAdded = 0;
-    const MAX_RETRIES = 3;
 
     const getPath = (item: FileSystemItem): string => {
         if (options.structure === 'flat' || !item.parentId) return '';
@@ -167,36 +167,55 @@ export const generateStreamingZip = (
         return pathParts.join('/') + '/';
     };
 
-    async function* yieldFiles() {
-        for (let i = 0; i < files.length; i++) {
-            const item = files[i];
-            let blob: Blob | null = null;
-            let retries = 0;
+    const chunks: FileSystemItem[][] = [];
+    let currentChunk: FileSystemItem[] = [];
+    let currentChunkSize = 0;
+    
+    for (const f of files) {
+        currentChunk.push(f);
+        currentChunkSize += f.size || 50000000; // Guess 50MB if unknown
+        if (currentChunkSize >= MAX_ZIP_SIZE) {
+            chunks.push(currentChunk);
+            currentChunk = [];
+            currentChunkSize = 0;
+        }
+    }
+    if (currentChunk.length > 0) chunks.push(currentChunk);
 
-            while (retries < MAX_RETRIES && !blob) {
-                try {
-                    blob = await getFileFromDB(item.id);
-                    if (!blob && item.s3Key) {
-                        if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Cloud Fetch: ${item.name}`);
-                        blob = await fetchFromS3(item.s3Key);
-                    }
-                    if (!blob) throw new Error(`Data missing`);
-                } catch (e) {
-                    retries++;
-                    if (retries >= MAX_RETRIES) {
-                        console.error(`Failed to retrieve ${item.name}`, e);
-                    }
-                }
+    const zipBlobs: Blob[] = [];
+    const usedNames = new Set<string>();
+
+    for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+        const chunk = chunks[chunkIdx];
+        const zip = new JSZip();
+        const results: { [id: string]: { blob: Blob, finalName: string, folderPath: string } } = {};
+        const queue = [...chunk.map((f, index) => ({ item: f, index, retries: 0 }))];
+        
+        const processTask = async (task: typeof queue[0]) => {
+            const { item, index } = task;
+        
+        try {
+            // 1. Retrieve Original Blob
+            let blob = await getFileFromDB(item.id);
+            
+            // Fallback to S3 if not in local DB
+            if (!blob && item.s3Key) {
+                if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Cloud Fetch: ${item.name}`);
+                blob = await fetchFromS3(item.s3Key);
             }
 
-            if (!blob) continue;
+            if (!blob) {
+                throw new Error(`Data missing for ${item.name}`);
+            }
 
+            // 2. Format Conversion Logic
             let extension = item.name.split('.').pop() || 'jpg';
             let finalName = item.name;
 
             const isRaw = item.fileType === 'raw';
             const targetFormat = options.format;
             const needsConversion = targetFormat !== 'original';
+            // Do not watermark RAW files if Original Format is selected, because watermarking forces a JPEG conversion
             const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && targetFormat !== 'original'));
 
             if (needsConversion || needsWatermark) {
@@ -205,32 +224,48 @@ export const generateStreamingZip = (
 
                 if (isRaw) {
                     const preview = await processFileForDisplay(new File([blob], item.name));
-                    if (preview) sourceBlob = preview;
-                    else canProcess = false;
+                    if (preview) {
+                        sourceBlob = preview;
+                    } else {
+                        canProcess = false;
+                        console.warn(`Skipping processing for ${item.name} - RAW preview failed.`);
+                    }
                 }
 
                 if (canProcess && sourceBlob) {
                     let processedBlob: Blob | null = null;
                     try {
                         if (needsWatermark) {
-                            processedBlob = await applyWatermark(sourceBlob, options.watermark.text, options.watermark.opacity, options.watermark.position, targetFormat);
+                            processedBlob = await applyWatermark(
+                                sourceBlob, 
+                                options.watermark.text, 
+                                options.watermark.opacity, 
+                                options.watermark.position,
+                                targetFormat
+                            );
                         } else if (needsConversion) {
                             processedBlob = await applyWatermark(sourceBlob, '', 0, 'bottom-right', targetFormat); 
                         }
-                    } catch (e) {
+                    } catch (processingErr) {
+                        console.warn(`Failed to process/watermark ${item.name}, falling back to original`, processingErr);
                         processedBlob = null;
                     }
 
                     if (processedBlob) {
                         blob = processedBlob;
-                        if (processedBlob.type === 'image/png') extension = 'png';
-                        else if (processedBlob.type === 'image/jpeg') extension = 'jpg';
+                        // Always ensure the extension matches the processed blob type
+                        if (processedBlob.type === 'image/png') {
+                            extension = 'png';
+                        } else if (processedBlob.type === 'image/jpeg') {
+                            extension = 'jpg';
+                        }
                     }
                 }
             }
 
+            // 3. Renaming Logic
             if (options.fileNamePattern === 'sequence') {
-                const seq = (i + 1).toString().padStart(3, '0');
+                const seq = (index + 1).toString().padStart(3, '0');
                 const base = options.baseName || 'Export';
                 finalName = `${base}_${seq}.${extension}`;
             } else {
@@ -239,6 +274,7 @@ export const generateStreamingZip = (
                 finalName = `${nameParts.join('.')}.${extension}`;
             }
 
+            // Handle Duplicate Names in Flat Mode
             if (options.structure === 'flat') {
                 let dedupName = finalName;
                 let c = 1;
@@ -253,45 +289,78 @@ export const generateStreamingZip = (
             }
 
             const folderPath = getPath(item);
-            
-            yield { name: folderPath + finalName, lastModified: new Date(), input: blob };
-            
-            if (options.includeXmp && (item.rating || item.flag || (item.tags && item.tags.length > 0))) {
-                const xmpContent = createXMP(item);
-                const xmpName = finalName.substring(0, finalName.lastIndexOf('.')) + '.xmp';
-                yield { name: folderPath + xmpName, lastModified: new Date(), input: xmpContent };
-            }
-
+            results[item.id] = { blob, finalName, folderPath };
             filesAdded++;
+            
             if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), item.name);
+
+        } catch (e) {
+            if (task.retries < MAX_RETRIES) {
+                console.warn(`Retrying ${item.name} (${task.retries + 1}/${MAX_RETRIES})`, e);
+                task.retries++;
+                queue.push(task); // Loop back
+            } else {
+                console.error(`CRITICAL: Failed to retrieve ${item.name} after ${MAX_RETRIES} attempts. Skipping file.`, e);
+            }
         }
-        
-        if (filesAdded < files.length) {
-            console.warn(`Export Integrity Warning: Expected ${files.length} files, but only ${filesAdded} were processed.`);
+    };
+
+    // Execute with Concurrency Limit
+        const workers = [];
+        const runWorker = async () => {
+            while (queue.length > 0) {
+                const task = queue.shift();
+                if (task) await processTask(task);
+            }
+        };
+
+        for (let i = 0; i < Math.min(CONCURRENCY_LIMIT, chunk.length); i++) {
+            workers.push(runWorker());
         }
-        if (onProgress) onProgress(100, "Finalizing ZIP stream...");
+
+        await Promise.all(workers);
+
+        // Add to Zip
+        for (const item of chunk) {
+            const res = results[item.id];
+            if (res) {
+                zip.file(res.folderPath + res.finalName, res.blob);
+                if (options.includeXmp && (item.rating || item.flag || (item.tags && item.tags.length > 0))) {
+                    const xmpContent = createXMP(item);
+                    const xmpName = res.finalName.substring(0, res.finalName.lastIndexOf('.')) + '.xmp';
+                    zip.file(res.folderPath + xmpName, xmpContent);
+                }
+            }
+        }
+
+        if (Object.keys(zip.files).length > 0) {
+            if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Finalizing ZIP Part ${chunkIdx + 1} of ${chunks.length}...`);
+            const chunkBlob = await zip.generateAsync({ type: 'blob' });
+            zipBlobs.push(chunkBlob);
+        }
+    }
+    
+    if (filesAdded < files.length) {
+        console.warn(`Export Integrity Warning: Expected ${files.length} files, but only ${filesAdded} were processed.`);
     }
 
-    return downloadZip(yieldFiles());
+    return zipBlobs;
 };
 
 /**
- * Fallback Export Logic - Chunked (Safari/Firefox)
- * Generates multiple ZIPs to bypass memory limits.
+ * Direct-to-Disk Streaming Zip Export using client-zip
  */
-export const generateChunkedExportZip = async (
+export const generateStreamingZip = async (
     itemsToExport: FileSystemItem[], 
-    allItems: FileSystemItem[],
+    allItems: FileSystemItem[], 
     options: ExportOptions,
     onProgress?: (percent: number, currentFile: string) => void
-): Promise<Blob[]> => {
+): Promise<Response> => {
     
     const usedNames = new Set<string>();
     let filesAdded = 0;
-    const CONCURRENCY_LIMIT = 3;
     const MAX_RETRIES = 5;
-    const MAX_ZIP_SIZE = 300 * 1024 * 1024; // 300MB
-
+    
     const files = itemsToExport.filter(i => i.type === 'file');
     if (files.length === 0) throw new Error("No files to export");
 
@@ -306,147 +375,115 @@ export const generateChunkedExportZip = async (
         return pathParts.join('/') + '/';
     };
 
-    // Split files into chunks by initial size estimate
-    const chunks: FileSystemItem[][] = [];
-    let currentChunk: FileSystemItem[] = [];
-    let currentChunkSize = 0;
-    
-    for (const f of files) {
-        currentChunk.push(f);
-        currentChunkSize += f.size || 0;
-        if (currentChunkSize >= MAX_ZIP_SIZE) {
-            chunks.push(currentChunk);
-            currentChunk = [];
-            currentChunkSize = 0;
-        }
-    }
-    if (currentChunk.length > 0) chunks.push(currentChunk);
-
-    const zipBlobs: Blob[] = [];
-
-    for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
-        const chunk = chunks[chunkIdx];
-        const zip = new JSZip();
-        const results: { [id: string]: { blob: Blob, finalName: string, folderPath: string } } = {};
-        const queue = [...chunk.map((f, index) => ({ item: f, index, retries: 0 }))];
-        
-        const processTask = async (task: typeof queue[0]) => {
-            const { item, index } = task;
-            try {
-                let blob = await getFileFromDB(item.id);
-                if (!blob && item.s3Key) {
-                    blob = await fetchFromS3(item.s3Key);
-                }
-                if (!blob) throw new Error(`Data missing for ${item.name}`);
-
-                let extension = item.name.split('.').pop() || 'jpg';
-                let finalName = item.name;
-
-                const isRaw = item.fileType === 'raw';
-                const targetFormat = options.format;
-                const needsConversion = targetFormat !== 'original';
-                const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && targetFormat !== 'original'));
-
-                if (needsConversion || needsWatermark) {
-                    let sourceBlob: Blob | null = blob;
-                    let canProcess = true;
-
-                    if (isRaw) {
-                        const preview = await processFileForDisplay(new File([blob], item.name));
-                        if (preview) sourceBlob = preview;
-                        else canProcess = false;
+    async function* getFiles() {
+        for (let index = 0; index < files.length; index++) {
+            const item = files[index];
+            let retries = 0;
+            let success = false;
+            
+            while (retries < MAX_RETRIES && !success) {
+                try {
+                    let blob = await getFileFromDB(item.id);
+                    if (!blob && item.s3Key) {
+                        if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Cloud Fetch: ${item.name}`);
+                        blob = await fetchFromS3(item.s3Key);
                     }
+                    if (!blob) throw new Error(`Data missing for ${item.name}`);
 
-                    if (canProcess && sourceBlob) {
-                        let processedBlob: Blob | null = null;
-                        try {
-                            if (needsWatermark) {
-                                processedBlob = await applyWatermark(sourceBlob, options.watermark.text, options.watermark.opacity, options.watermark.position, targetFormat);
-                            } else if (needsConversion) {
-                                processedBlob = await applyWatermark(sourceBlob, '', 0, 'bottom-right', targetFormat); 
+                    let extension = item.name.split('.').pop() || 'jpg';
+                    let finalName = item.name;
+
+                    const isRaw = item.fileType === 'raw';
+                    const targetFormat = options.format;
+                    const needsConversion = targetFormat !== 'original';
+                    const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && targetFormat !== 'original'));
+
+                    if (needsConversion || needsWatermark) {
+                        let sourceBlob: Blob | null = blob;
+                        let canProcess = true;
+
+                        if (isRaw) {
+                            const preview = await processFileForDisplay(new File([blob], item.name));
+                            if (preview) {
+                                sourceBlob = preview;
+                            } else {
+                                canProcess = false;
+                                console.warn(`Skipping processing for ${item.name} - RAW preview failed.`);
                             }
-                        } catch (e) {
-                            processedBlob = null;
                         }
 
-                        if (processedBlob) {
-                            blob = processedBlob;
-                            if (processedBlob.type === 'image/png') extension = 'png';
-                            else if (processedBlob.type === 'image/jpeg') extension = 'jpg';
+                        if (canProcess && sourceBlob) {
+                            let processedBlob: Blob | null = null;
+                            try {
+                                if (needsWatermark) {
+                                    processedBlob = await applyWatermark(sourceBlob, options.watermark.text, options.watermark.opacity, options.watermark.position, targetFormat);
+                                } else if (needsConversion) {
+                                    processedBlob = await applyWatermark(sourceBlob, '', 0, 'bottom-right', targetFormat); 
+                                }
+                            } catch (processingErr) {
+                                console.warn(`Failed to process/watermark ${item.name}`, processingErr);
+                            }
+                            if (processedBlob) {
+                                blob = processedBlob;
+                                if (processedBlob.type === 'image/png') extension = 'png';
+                                else if (processedBlob.type === 'image/jpeg') extension = 'jpg';
+                            }
                         }
                     }
-                }
 
-                if (options.fileNamePattern === 'sequence') {
-                    const seq = (index + 1).toString().padStart(3, '0');
-                    const base = options.baseName || 'Export';
-                    finalName = `${base}_${seq}.${extension}`;
-                } else {
-                    const nameParts = item.name.split('.');
-                    nameParts.pop();
-                    finalName = `${nameParts.join('.')}.${extension}`;
-                }
-
-                if (options.structure === 'flat') {
-                    let dedupName = finalName;
-                    let c = 1;
-                    while (usedNames.has(dedupName)) {
-                        const parts = finalName.split('.');
-                        const ext = parts.pop();
-                        dedupName = `${parts.join('.')}_${c}.${ext}`;
-                        c++;
+                    if (options.fileNamePattern === 'sequence') {
+                        const seq = (index + 1).toString().padStart(3, '0');
+                        const base = options.baseName || 'Export';
+                        finalName = `${base}_${seq}.${extension}`;
+                    } else {
+                        const nameParts = item.name.split('.');
+                        nameParts.pop();
+                        finalName = `${nameParts.join('.')}.${extension}`;
                     }
-                    finalName = dedupName;
-                    usedNames.add(finalName);
-                }
 
-                const folderPath = getPath(item);
-                results[item.id] = { blob, finalName, folderPath };
-                filesAdded++;
-                
-                if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), item.name);
+                    if (options.structure === 'flat') {
+                        let dedupName = finalName;
+                        let c = 1;
+                        while (usedNames.has(dedupName)) {
+                            const parts = finalName.split('.');
+                            const ext = parts.pop();
+                            dedupName = `${parts.join('.')}_${c}.${ext}`;
+                            c++;
+                        }
+                        finalName = dedupName;
+                        usedNames.add(finalName);
+                    }
 
-            } catch (e) {
-                if (task.retries < MAX_RETRIES) {
-                    task.retries++;
-                    queue.push(task); 
-                }
-            }
-        };
+                    const folderPath = getPath(item);
+                    const lastModified = item.createdAt ? new Date(item.createdAt) : new Date();
 
-        const workers = [];
-        for (let i = 0; i < Math.min(CONCURRENCY_LIMIT, queue.length); i++) {
-            workers.push((async () => {
-                while (queue.length > 0) {
-                    const task = queue.shift();
-                    if (task) await processTask(task);
-                }
-            })());
-        }
-        await Promise.all(workers);
+                    yield { name: folderPath + finalName, lastModified, input: blob };
+                    
+                    if (options.includeXmp && (item.rating || item.flag || (item.tags && item.tags.length > 0))) {
+                        const xmpContent = createXMP(item);
+                        const xmpName = finalName.substring(0, finalName.lastIndexOf('.')) + '.xmp';
+                        yield { name: folderPath + xmpName, lastModified, input: xmpContent };
+                    }
+                    
+                    filesAdded++;
+                    if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), item.name);
+                    success = true;
 
-        for (const item of chunk) {
-            const res = results[item.id];
-            if (res) {
-                zip.file(res.folderPath + res.finalName, res.blob);
-                if (options.includeXmp && (item.rating || item.flag || (item.tags && item.tags.length > 0))) {
-                    const xmpContent = createXMP(item);
-                    const xmpName = res.finalName.substring(0, res.finalName.lastIndexOf('.')) + '.xmp';
-                    zip.file(res.folderPath + xmpName, xmpContent);
+                } catch (e) {
+                    retries++;
+                    if (retries >= MAX_RETRIES) {
+                        console.error(`CRITICAL: Failed to retrieve ${item.name} after ${MAX_RETRIES} attempts. Skipping.`, e);
+                    } else {
+                        console.warn(`Retrying ${item.name} (${retries}/${MAX_RETRIES})`, e);
+                    }
                 }
             }
         }
-
-        if (Object.keys(zip.files).length > 0) {
-            if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Zipping Part ${chunkIdx + 1} of ${chunks.length}...`);
-            const chunkBlob = await zip.generateAsync({ type: 'blob' });
-            zipBlobs.push(chunkBlob);
+        
+        if (filesAdded < files.length) {
+            console.warn(`Export Integrity Warning: Expected ${files.length} files, but only ${filesAdded} were processed.`);
         }
     }
-
-    if (filesAdded < files.length) {
-        console.warn(`Export Integrity Warning: Expected ${files.length} files, but only ${filesAdded} were processed.`);
-    }
-
-    return zipBlobs;
+    
+    return downloadZip(getFiles());
 };
