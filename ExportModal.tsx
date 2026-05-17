@@ -122,7 +122,10 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
 
   if (!isOpen) return null;
 
-  const filesCount = getFilesToExport().length;
+  const filesToExport = getFilesToExport();
+  const filesCount = filesToExport.length;
+  const hasRawFiles = filesToExport.some(f => f.fileType === 'raw');
+  const showRawWatermarkWarning = watermarkEnabled && format === 'original' && hasRawFiles;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -268,6 +271,15 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
                             <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-dark-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-white/10 peer-checked:bg-primary"></div>
                         </label>
                     </div>
+                    
+                    {showRawWatermarkWarning && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mt-3 flex items-start gap-3">
+                            <i className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5"></i>
+                            <div className="text-xs text-amber-700 dark:text-amber-400">
+                                <strong>RAW Format Selected:</strong> Watermarks will not appear on RAW photos. To apply watermarks to these files, please change the Format Conversion to JPEG.
+                            </div>
+                        </div>
+                    )}
 
                     <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 transition-opacity duration-200 ${watermarkEnabled ? 'opacity-100 pointer-events-auto' : 'opacity-50 pointer-events-none'}`}>
                         <div>
