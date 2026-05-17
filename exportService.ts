@@ -199,8 +199,9 @@ export const generateExportZip = async (
 
             const isRaw = item.fileType === 'raw';
             const targetFormat = options.format;
-            const needsConversion = targetFormat !== 'original' || (isRaw && targetFormat !== 'original');
-            const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || isRaw);
+            const needsConversion = targetFormat !== 'original';
+            // Do not watermark RAW files if Original Format is selected, because watermarking forces a JPEG conversion
+            const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && targetFormat !== 'original'));
 
             if (needsConversion || needsWatermark) {
                 let sourceBlob: Blob | null = blob;
