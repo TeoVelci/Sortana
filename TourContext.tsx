@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 
 // --- Types ---
 
-export type TourId = 'dashboard' | 'browse' | 'account';
+export type TourId = 'dashboard' | 'browse' | 'account' | 'export';
 
 export interface TourStep {
   targetId: string;
@@ -108,6 +108,28 @@ const TOURS: Record<TourId, TourStep[]> = {
       targetId: 'account-debug',
       title: 'Debug Tools',
       content: 'Since this is a demo, you can simulate different subscription tiers here to test feature gating.',
+    }
+  ],
+  export: [
+    {
+      targetId: 'export-file-settings',
+      title: 'File Settings',
+      content: 'Choose your naming convention and format. Pro users can bulk-convert RAW files to JPEG/PNG and rename sequences.',
+    },
+    {
+      targetId: 'export-folder-structure',
+      title: 'Folder Structure',
+      content: 'Choose whether to preserve your existing folder hierarchy or flatten everything into a single folder.',
+    },
+    {
+      targetId: 'export-direct-to-disk',
+      title: 'Direct to Disk',
+      content: 'If you are on Chrome or Edge, enable this to stream massive exports directly to your hard drive, preventing browser crashes.',
+    },
+    {
+      targetId: 'export-watermark',
+      title: 'Watermarking',
+      content: 'Studio users can apply custom text watermarks to exported images to protect their work.',
     }
   ]
 };

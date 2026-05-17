@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useApp, FileSystemItem } from './AppContext';
+import { useTour } from './TourContext';
 import { generateStreamingZip, generateChunkedZips, ExportOptions } from './exportService';
 import { useToast } from './ToastContext';
 
@@ -13,6 +14,7 @@ interface ExportModalProps {
 const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItems }) => {
   const { items, user } = useApp(); // Need all items for folder structure
   const { showToast } = useToast();
+  const { startTour } = useTour();
 
   // Feature Gating Logic
   const isProOrAbove = ['Pro', 'Studio'].includes(user.plan);
@@ -54,6 +56,21 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
         setWatermarkEnabled(false);
     }
   }, [user.plan, isProOrAbove, isStudio]);
+
+  // Tour Auto-Trigger
+  useEffect(() => {
+      if (isOpen) {
+          const timer = setTimeout(() => {
+              try {
+                  const status = JSON.parse(localStorage.getItem('sortana_tours') || '{}');
+                  if (!status.export) {
+                      startTour('export');
+                  }
+              } catch {}
+          }, 500); // Wait for modal animation to complete
+          return () => clearTimeout(timer);
+      }
+  }, [isOpen, startTour]);
 
   // Count files recursively (if folders selected)
   const getFilesToExport = () => {
@@ -182,7 +199,7 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
             <div className="flex-1 overflow-y-auto p-6 space-y-8">
                 
                 {/* 1. File Settings */}
-                <section className="space-y-4">
+                <section id="export-file-settings" className="space-y-4">
                     <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-b border-gray-200 dark:border-dark-700 pb-2">File Settings</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Naming Pattern (Restricted) */}
@@ -234,7 +251,7 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
                         </div>
 
                         {/* Folder Structure (Allowed for All) */}
-                        <div>
+                        <div id="export-folder-structure">
                             <label className="block text-xs font-medium text-gray-500 mb-1.5">Folder Structure</label>
                             <div className="flex bg-gray-100 dark:bg-dark-800 rounded-lg p-1">
                                 <button 
@@ -253,7 +270,7 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
                         </div>
 
                         {/* Direct to Disk Option */}
-                        <div className={`transition-opacity ${!supportsDirectToDisk ? 'opacity-50 relative' : ''}`}>
+                        <div id="export-direct-to-disk" className={`transition-opacity ${!supportsDirectToDisk ? 'opacity-50 relative' : ''}`}>
                             <label className="block text-xs font-medium text-gray-500 mb-2 flex justify-between">
                                 <span>Direct to Disk Streaming</span>
                                 {!supportsDirectToDisk && <span className="text-gray-400 font-bold text-[10px]">CHROME/EDGE ONLY</span>}
@@ -300,7 +317,7 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
                 </section>
 
                 {/* 3. Watermark Settings (Restricted) */}
-                <section className={`space-y-4 transition-all duration-300 ${!isStudio ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+                <section id="export-watermark" className={`space-y-4 transition-all duration-300 ${!isStudio ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
                     <div className="flex justify-between items-center border-b border-gray-200 dark:border-dark-700 pb-2">
                         <div className="flex items-center gap-2">
                             <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Watermark</h3>
