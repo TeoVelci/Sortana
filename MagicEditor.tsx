@@ -4,6 +4,7 @@ import { editImageWithAI } from './aiService';
 import { useToast } from './ToastContext';
 import { getPublicUrl } from './storageService';
 import { useAwsUrl } from './useAwsUrl';
+import { useTour } from './TourContext';
 
 interface MagicEditorProps {
   item: FileSystemItem;
@@ -27,6 +28,24 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isComparing, setIsComparing] = useState(false); // True when user holds "Compare"
+  
+  const { startTour } = useTour();
+
+  useEffect(() => {
+      const isMobile = window.innerWidth < 768;
+      const tourId = isMobile ? 'magic_editor_mobile' : 'magic_editor_desktop';
+      
+      try {
+          const status = JSON.parse(localStorage.getItem('sortana_tours') || '{}');
+          if (!status[tourId]) {
+              // Slight delay to ensure elements are mounted
+              const timer = setTimeout(() => {
+                  startTour(tourId);
+              }, 500);
+              return () => clearTimeout(timer);
+          }
+      } catch { }
+  }, [startTour]);
 
   const isVideo = item.fileType === 'video';
   const directAwsUrl = useAwsUrl(item.proxyS3Key || item.s3Key);
@@ -207,7 +226,7 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
                 {/* Input Area */}
                 <div className="flex gap-3">
                     {!isVideo && (
-                        <div className="flex-1 relative">
+                        <div className="flex-1 relative" id="magic-input-bar">
                             <input 
                                 type="text" 
                                 value={prompt}
@@ -221,25 +240,27 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
                     )}
                     
                     <button 
+                        id="magic-btn-generate"
                         onClick={handleGenerate}
                         disabled={isGenerating || (!isVideo && !prompt.trim())}
-                        className="bg-brand-purple hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-bold transition-all shadow-neon flex items-center gap-2"
+                        className="bg-brand-purple hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white p-3 md:px-6 md:py-3 rounded-xl font-bold transition-all shadow-neon flex items-center justify-center gap-2 shrink-0 aspect-square md:aspect-auto"
                     >
                         <i className="fa-solid fa-wand-magic-sparkles"></i>
-                        <span>{isVideo ? 'Deep AI Analysis' : 'Generate'}</span>
+                        <span className="hidden md:inline">{isVideo ? 'Deep AI Analysis' : 'Generate'}</span>
                     </button>
 
                     {generatedImage && (
-                        <div className="w-px h-12 bg-white/10 mx-2"></div>
+                        <div className="w-px h-12 bg-white/10 mx-2 shrink-0"></div>
                     )}
 
                     {generatedImage && (
                         <button 
+                            id="magic-btn-save"
                             onClick={handleSave}
-                            className="bg-white text-dark-900 hover:bg-gray-200 px-6 py-3 rounded-xl font-bold transition-colors flex items-center gap-2"
+                            className="bg-white text-dark-900 hover:bg-gray-200 p-3 md:px-6 md:py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shrink-0 aspect-square md:aspect-auto"
                         >
                             <i className="fa-solid fa-floppy-disk"></i>
-                            <span>Save Copy</span>
+                            <span className="hidden md:inline">Save Copy</span>
                         </button>
                     )}
                 </div>

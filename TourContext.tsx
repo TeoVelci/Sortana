@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 
 // --- Types ---
 
-export type TourId = 'dashboard' | 'browse' | 'account' | 'export';
+export type TourId = 'dashboard' | 'browse' | 'account' | 'export' | 'magic_editor_mobile' | 'magic_editor_desktop';
 
 export interface TourStep {
   targetId: string;
@@ -130,6 +130,40 @@ const TOURS: Record<TourId, TourStep[]> = {
       targetId: 'export-watermark',
       title: 'Watermarking',
       content: 'Studio users can apply custom text watermarks to exported images to protect their work.',
+    }
+  ],
+  magic_editor_mobile: [
+    {
+      targetId: 'magic-input-bar',
+      title: 'Prompt',
+      content: 'Type what you want to change in the image here.',
+    },
+    {
+      targetId: 'magic-btn-generate',
+      title: 'Generate',
+      content: 'Tap the wand icon to apply your changes using AI.',
+    },
+    {
+      targetId: 'magic-btn-save',
+      title: 'Save Copy',
+      content: 'Tap the floppy disk to save your new edited image.',
+    }
+  ],
+  magic_editor_desktop: [
+    {
+      targetId: 'magic-input-bar',
+      title: 'Prompt',
+      content: 'Type what you want to change in the image here.',
+    },
+    {
+      targetId: 'magic-btn-generate',
+      title: 'Generate',
+      content: 'Click here to apply your changes using AI.',
+    },
+    {
+      targetId: 'magic-btn-save',
+      title: 'Save Copy',
+      content: 'Click here to save your new edited image.',
     }
   ]
 };
