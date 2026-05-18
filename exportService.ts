@@ -4,7 +4,7 @@ import { downloadZip } from 'client-zip';
 import { getFileFromDB } from './dbService';
 import { FileSystemItem } from './AppContext';
 import { processFileForDisplay } from './aiService';
-import { downloadFileFromS3 } from './storageService';
+import { downloadFileFromS3, getPublicUrl } from './storageService';
 
 export interface ExportOptions {
     fileNamePattern: 'original' | 'sequence';
@@ -383,13 +383,6 @@ export const generateStreamingZip = async (
             
             while (retries < MAX_RETRIES && !success) {
                 try {
-                    let blob = await getFileFromDB(item.id);
-                    if (!blob && item.s3Key) {
-                        if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Cloud Fetch: ${item.name}`);
-                        blob = await fetchFromS3(item.s3Key);
-                    }
-                    if (!blob) throw new Error(`Data missing for ${item.name}`);
-
                     let extension = item.name.split('.').pop() || 'jpg';
                     let finalName = item.name;
 
@@ -398,7 +391,16 @@ export const generateStreamingZip = async (
                     const needsConversion = targetFormat !== 'original';
                     const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && targetFormat !== 'original'));
 
+                    let inputData: Blob | Response | undefined;
+                    let blob = await getFileFromDB(item.id);
+
                     if (needsConversion || needsWatermark) {
+                        if (!blob && item.s3Key) {
+                            if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Cloud Fetch: ${item.name}`);
+                            blob = await fetchFromS3(item.s3Key);
+                        }
+                        if (!blob) throw new Error(`Data missing for ${item.name}`);
+
                         let sourceBlob: Blob | null = blob;
                         let canProcess = true;
 
@@ -429,7 +431,21 @@ export const generateStreamingZip = async (
                                 else if (processedBlob.type === 'image/jpeg') extension = 'jpg';
                             }
                         }
+                        inputData = blob;
+                    } else {
+                        // NO CONVERSION NEEDED - STREAM DIRECTLY FROM S3!
+                        if (blob) {
+                            inputData = blob;
+                        } else if (item.s3Key) {
+                            if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Downloading: ${item.name}`);
+                            const url = getPublicUrl(item.s3Key);
+                            const response = await fetch(url);
+                            if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+                            inputData = response;
+                        }
                     }
+
+                    if (!inputData) throw new Error(`Data missing for ${item.name}`);
 
                     if (options.fileNamePattern === 'sequence') {
                         const seq = (index + 1).toString().padStart(3, '0');
@@ -457,7 +473,7 @@ export const generateStreamingZip = async (
                     const folderPath = getPath(item);
                     const lastModified = item.createdAt ? new Date(item.createdAt) : new Date();
 
-                    yield { name: folderPath + finalName, lastModified, input: blob };
+                    yield { name: folderPath + finalName, lastModified, input: inputData };
                     
                     if (options.includeXmp && (item.rating || item.flag || (item.tags && item.tags.length > 0))) {
                         const xmpContent = createXMP(item);
