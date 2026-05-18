@@ -330,11 +330,18 @@ export const generateChunkedZips = async (
         if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Finalizing ZIP Part ${chunkIdx + 1} of ${chunks.length}...`);
         const response = await downloadZip(wrappedGenerator);
         
-        // Consume the stream to pull files from the generator
-        const chunkBlob = await response.blob();
+        // Consume the stream manually to bypass WebKit response.blob() deadlock bug
+        const reader = response.body!.getReader();
+        const blobChunks: Uint8Array[] = [];
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            blobChunks.push(value);
+        }
 
         // Only add to zip blobs if we actually yielded files
         if (hasYielded) {
+            const chunkBlob = new Blob(blobChunks, { type: 'application/zip' });
             zipBlobs.push(chunkBlob);
         }
     }
