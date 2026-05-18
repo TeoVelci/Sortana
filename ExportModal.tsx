@@ -4,6 +4,7 @@ import { useApp, FileSystemItem } from './AppContext';
 import { useTour } from './TourContext';
 import { generateStreamingZip, generateChunkedZips, ExportOptions } from './exportService';
 import { useToast } from './ToastContext';
+import { getPublicUrl } from './storageService';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -149,6 +150,30 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
               }
           } else {
               // Safari / Mobile Fallback
+
+              // Single file fast-path: Skip ZIP generation and RAM limits for single unmodified files (like large videos)
+              if (files.length === 1) {
+                  const item = files[0];
+                  const isRaw = item.fileType === 'raw';
+                  const needsConversion = options.format !== 'original';
+                  const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && options.format !== 'original'));
+                  
+                  if (!needsConversion && !needsWatermark && item.s3Key) {
+                      const url = getPublicUrl(item.s3Key);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = item.name;
+                      // Fallback: iOS Safari might not download automatically via a.click() without target=_blank for some MIME types, but we can try
+                      a.target = '_blank';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      showToast("Export complete!", "success");
+                      onClose();
+                      return;
+                  }
+              }
+
               const blobs = await generateChunkedZips(files, items, options, (p, name) => {
                   setProgress(p);
                   setStatusText(p === 100 ? "Zipping..." : `Processing: ${name}`);
