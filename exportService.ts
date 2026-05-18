@@ -188,156 +188,150 @@ export const generateChunkedZips = async (
 
     for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
         const chunk = chunks[chunkIdx];
-        const results: { [id: string]: { blob: Blob, finalName: string, folderPath: string } } = {};
-        const queue = [...chunk.map((f, index) => ({ item: f, index, retries: 0 }))];
         
-        const processTask = async (task: typeof queue[0]) => {
-            const { item, index } = task;
-        
-        try {
-            // 1. Retrieve Original Blob
-            let blob = await getFileFromDB(item.id);
-            
-            // Fallback to S3 if not in local DB
-            if (!blob && item.s3Key) {
-                if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Cloud Fetch: ${item.name}`);
-                blob = await fetchFromS3(item.s3Key);
-            }
-
-            if (!blob) {
-                throw new Error(`Data missing for ${item.name}`);
-            }
-
-            // 2. Format Conversion Logic
-            let extension = item.name.split('.').pop() || 'jpg';
-            let finalName = item.name;
-
-            const isRaw = item.fileType === 'raw';
-            const targetFormat = options.format;
-            const needsConversion = targetFormat !== 'original';
-            // Do not watermark RAW files if Original Format is selected, because watermarking forces a JPEG conversion
-            const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && targetFormat !== 'original'));
-
-            if (needsConversion || needsWatermark) {
-                let sourceBlob: Blob | null = blob;
-                let canProcess = true;
-
-                if (isRaw) {
-                    const preview = await processFileForDisplay(new File([blob], item.name));
-                    if (preview) {
-                        sourceBlob = preview;
-                    } else {
-                        canProcess = false;
-                        console.warn(`Skipping processing for ${item.name} - RAW preview failed.`);
-                    }
-                }
-
-                if (canProcess && sourceBlob) {
-                    let processedBlob: Blob | null = null;
+        async function* getChunkFiles() {
+            for (let index = 0; index < chunk.length; index++) {
+                const item = chunk[index];
+                let retries = 0;
+                let success = false;
+                
+                while (retries < MAX_RETRIES && !success) {
                     try {
-                        if (needsWatermark) {
-                            processedBlob = await applyWatermark(
-                                sourceBlob, 
-                                options.watermark.text, 
-                                options.watermark.opacity, 
-                                options.watermark.position,
-                                targetFormat
-                            );
-                        } else if (needsConversion) {
-                            processedBlob = await applyWatermark(sourceBlob, '', 0, 'bottom-right', targetFormat); 
+                        let extension = item.name.split('.').pop() || 'jpg';
+                        let finalName = item.name;
+
+                        const isRaw = item.fileType === 'raw';
+                        const targetFormat = options.format;
+                        const needsConversion = targetFormat !== 'original';
+                        const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && targetFormat !== 'original'));
+
+                        let inputData: Blob | Response | undefined;
+                        let blob = await getFileFromDB(item.id);
+
+                        if (needsConversion || needsWatermark) {
+                            if (!blob && item.s3Key) {
+                                if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Cloud Fetch: ${item.name}`);
+                                blob = await fetchFromS3(item.s3Key);
+                            }
+                            if (!blob) throw new Error(`Data missing for ${item.name}`);
+
+                            let sourceBlob: Blob | null = blob;
+                            let canProcess = true;
+
+                            if (isRaw) {
+                                const preview = await processFileForDisplay(new File([blob], item.name));
+                                if (preview) {
+                                    sourceBlob = preview;
+                                } else {
+                                    canProcess = false;
+                                    console.warn(`Skipping processing for ${item.name} - RAW preview failed.`);
+                                }
+                            }
+
+                            if (canProcess && sourceBlob) {
+                                let processedBlob: Blob | null = null;
+                                try {
+                                    if (needsWatermark) {
+                                        processedBlob = await applyWatermark(sourceBlob, options.watermark.text, options.watermark.opacity, options.watermark.position, targetFormat);
+                                    } else if (needsConversion) {
+                                        processedBlob = await applyWatermark(sourceBlob, '', 0, 'bottom-right', targetFormat); 
+                                    }
+                                } catch (processingErr) {
+                                    console.warn(`Failed to process/watermark ${item.name}`, processingErr);
+                                }
+                                if (processedBlob) {
+                                    blob = processedBlob;
+                                    if (processedBlob.type === 'image/png') extension = 'png';
+                                    else if (processedBlob.type === 'image/jpeg') extension = 'jpg';
+                                }
+                            }
+                            inputData = blob;
+                        } else {
+                            // NO CONVERSION NEEDED - STREAM DIRECTLY FROM S3!
+                            if (blob) {
+                                inputData = blob;
+                            } else if (item.s3Key) {
+                                if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Streaming: ${item.name}`);
+                                const url = getPublicUrl(item.s3Key);
+                                const response = await fetch(url);
+                                if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+                                inputData = response;
+                            } else {
+                                throw new Error(`Data missing for ${item.name}`);
+                            }
                         }
-                    } catch (processingErr) {
-                        console.warn(`Failed to process/watermark ${item.name}, falling back to original`, processingErr);
-                        processedBlob = null;
-                    }
 
-                    if (processedBlob) {
-                        blob = processedBlob;
-                        // Always ensure the extension matches the processed blob type
-                        if (processedBlob.type === 'image/png') {
-                            extension = 'png';
-                        } else if (processedBlob.type === 'image/jpeg') {
-                            extension = 'jpg';
+                        if (!inputData) throw new Error("No input data generated");
+
+                        // Renaming Logic
+                        if (options.fileNamePattern === 'sequence') {
+                            const seq = (index + 1).toString().padStart(3, '0');
+                            const base = options.baseName || 'Export';
+                            finalName = `${base}_${seq}.${extension}`;
+                        } else {
+                            const nameParts = item.name.split('.');
+                            nameParts.pop();
+                            finalName = `${nameParts.join('.')}.${extension}`;
+                        }
+
+                        // Handle Duplicate Names in Flat Mode
+                        if (options.structure === 'flat') {
+                            let dedupName = finalName;
+                            let c = 1;
+                            while (usedNames.has(dedupName)) {
+                                const parts = finalName.split('.');
+                                const ext = parts.pop();
+                                dedupName = `${parts.join('.')}_${c}.${ext}`;
+                                c++;
+                            }
+                            finalName = dedupName;
+                            usedNames.add(finalName);
+                        }
+
+                        const folderPath = getPath(item);
+                        const lastModified = item.createdAt ? new Date(item.createdAt) : new Date();
+                        
+                        yield { name: folderPath + finalName, lastModified, input: inputData };
+
+                        if (options.includeXmp && (item.rating || item.flag || (item.tags && item.tags.length > 0))) {
+                            const xmpContent = createXMP(item);
+                            const xmpName = finalName.substring(0, finalName.lastIndexOf('.')) + '.xmp';
+                            yield { name: folderPath + xmpName, lastModified, input: xmpContent };
+                        }
+
+                        filesAdded++;
+                        if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), item.name);
+                        success = true;
+
+                    } catch (e) {
+                        retries++;
+                        if (retries >= MAX_RETRIES) {
+                            console.error(`CRITICAL: Failed to retrieve ${item.name} after ${MAX_RETRIES} attempts. Skipping file.`, e);
+                            break; // Give up on this file
+                        } else {
+                            console.warn(`Retrying ${item.name} (${retries}/${MAX_RETRIES})`, e);
+                            await new Promise(r => setTimeout(r, 1000 * retries)); // backoff
                         }
                     }
                 }
             }
-
-            // 3. Renaming Logic
-            if (options.fileNamePattern === 'sequence') {
-                const seq = (index + 1).toString().padStart(3, '0');
-                const base = options.baseName || 'Export';
-                finalName = `${base}_${seq}.${extension}`;
-            } else {
-                const nameParts = item.name.split('.');
-                nameParts.pop();
-                finalName = `${nameParts.join('.')}.${extension}`;
-            }
-
-            // Handle Duplicate Names in Flat Mode
-            if (options.structure === 'flat') {
-                let dedupName = finalName;
-                let c = 1;
-                while (usedNames.has(dedupName)) {
-                    const parts = finalName.split('.');
-                    const ext = parts.pop();
-                    dedupName = `${parts.join('.')}_${c}.${ext}`;
-                    c++;
-                }
-                finalName = dedupName;
-                usedNames.add(finalName);
-            }
-
-            const folderPath = getPath(item);
-            results[item.id] = { blob, finalName, folderPath };
-            filesAdded++;
-            
-            if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), item.name);
-
-        } catch (e) {
-            if (task.retries < MAX_RETRIES) {
-                console.warn(`Retrying ${item.name} (${task.retries + 1}/${MAX_RETRIES})`, e);
-                task.retries++;
-                queue.push(task); // Loop back
-            } else {
-                console.error(`CRITICAL: Failed to retrieve ${item.name} after ${MAX_RETRIES} attempts. Skipping file.`, e);
-            }
-        }
-    };
-
-    // Execute with Concurrency Limit
-        const workers = [];
-        const runWorker = async () => {
-            while (queue.length > 0) {
-                const task = queue.shift();
-                if (task) await processTask(task);
-            }
-        };
-
-        for (let i = 0; i < Math.min(CONCURRENCY_LIMIT, chunk.length); i++) {
-            workers.push(runWorker());
         }
 
-        await Promise.all(workers);
-
-        // Add to Zip via client-zip
-        const zipInputs = [];
-        for (const item of chunk) {
-            const res = results[item.id];
-            if (res) {
-                const lastModified = item.createdAt ? new Date(item.createdAt) : new Date();
-                zipInputs.push({ name: res.folderPath + res.finalName, lastModified, input: res.blob });
-                if (options.includeXmp && (item.rating || item.flag || (item.tags && item.tags.length > 0))) {
-                    const xmpContent = createXMP(item);
-                    const xmpName = res.finalName.substring(0, res.finalName.lastIndexOf('.')) + '.xmp';
-                    zipInputs.push({ name: res.folderPath + xmpName, lastModified, input: xmpContent });
-                }
+        let hasYielded = false;
+        async function* trackYields(gen: AsyncGenerator<any>) {
+            for await (const item of gen) {
+                hasYielded = true;
+                yield item;
             }
         }
 
-        if (zipInputs.length > 0) {
-            if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Finalizing ZIP Part ${chunkIdx + 1} of ${chunks.length}...`);
-            const response = await downloadZip(zipInputs);
+        const wrappedGenerator = trackYields(getChunkFiles());
+
+        if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Finalizing ZIP Part ${chunkIdx + 1} of ${chunks.length}...`);
+        const response = await downloadZip(wrappedGenerator);
+        
+        // Only generate blob if we actually yielded files
+        if (hasYielded) {
             const chunkBlob = await response.blob();
             zipBlobs.push(chunkBlob);
         }
