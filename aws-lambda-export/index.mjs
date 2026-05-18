@@ -1,8 +1,8 @@
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
-import archiver from 'archiver';
-import sharp from 'sharp';
 import { PassThrough } from 'stream';
+import { ZipArchive } from 'archiver';
+import sharp from 'sharp';
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET = process.env.AWS_BUCKET_NAME;
@@ -62,7 +62,7 @@ export const handler = async (event) => {
 
         // Create streams
         const passThrough = new PassThrough();
-        const archive = archiver('zip', { zlib: { level: 9 } });
+        const archive = new ZipArchive({ zlib: { level: 9 }, forceZip64: false, forceLocalTime: true });
 
         archive.on('error', (err) => {
             throw err;
@@ -94,6 +94,7 @@ export const handler = async (event) => {
             const needsConversion = options.format !== 'original' && isImage;
 
             let fileStream = s3Response.Body;
+            let streamToAwait = fileStream;
 
             if (needsWatermark || needsConversion) {
                 let pipeline = sharp();
@@ -121,10 +122,19 @@ export const handler = async (event) => {
                     pipeline = pipeline.jpeg({ quality: 90 });
                 }
 
+                streamToAwait = pipeline;
                 archive.append(pipeline, { name: file.folderPath + file.finalName });
             } else {
                 archive.append(fileStream, { name: file.folderPath + file.finalName });
             }
+
+            // Await the stream to finish before fetching the next file
+            // This prevents opening 20 concurrent S3 sockets which would timeout
+            await new Promise((resolve, reject) => {
+                streamToAwait.on('end', resolve);
+                streamToAwait.on('close', resolve);
+                streamToAwait.on('error', reject);
+            });
         }
 
         if (options.includeXmp) {

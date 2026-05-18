@@ -227,8 +227,32 @@ export const generateCloudExport = async (
         throw new Error(error.message || "Failed to trigger cloud export");
     }
 
+    if (data?.error) {
+        console.error("Cloud export backend error:", data);
+        throw new Error(`Auth/Backend Error: ${JSON.stringify(data.details || data.error)}`);
+    }
+
     return data.s3Key;
 };
+
+export const checkExportStatus = async (s3Key: string): Promise<boolean> => {
+    try {
+        const { data, error } = await supabase.functions.invoke('check-export-status', {
+            body: { key: s3Key },
+            method: 'POST'
+        });
+        
+        if (error) {
+            console.error("Check status error:", error);
+            return false;
+        }
+
+        return !!data?.ready;
+    } catch(e) {
+        console.error("Failed to check export status:", e);
+    }
+    return false;
+}
 
 /**
  * Main Export Logic (Legacy Local)

@@ -13,18 +13,29 @@ serve(async (req) => {
   }
 
   try {
+    const authHeader = req.headers.get('Authorization')
+    console.log("Authorization Header Present:", !!authHeader)
+    
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      { global: { headers: { Authorization: authHeader! } } }
     )
 
-    const { data: { user } } = await supabaseClient.auth.getUser()
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    
+    if (authError) {
+        console.error("Auth Error:", authError)
+    }
+
     if (!user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 })
+      console.log("No user found, returning error detail.")
+      return new Response(JSON.stringify({ s3Key: null, error: 'Unauthorized', details: authError }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
     }
 
     const body = await req.json()
+    console.log("Received body files count:", body.files?.length)
+    
     const { files, options } = body
     
     // Generate a unique export ID
@@ -37,6 +48,7 @@ serve(async (req) => {
         exportId
     }
 
+    console.log("Invoking Lambda...")
     // Invoke AWS Lambda Asynchronously so we don't hit edge function timeouts
     const lambda = new LambdaClient({
       region: Deno.env.get('AWS_REGION') ?? '',
@@ -52,7 +64,8 @@ serve(async (req) => {
       Payload: new TextEncoder().encode(JSON.stringify(lambdaPayload))
     })
 
-    await lambda.send(command)
+    const lambdaResponse = await lambda.send(command)
+    console.log("Lambda Invoked, StatusCode:", lambdaResponse.StatusCode)
 
     // Return the expected S3 Key immediately. Frontend will poll for its existence.
     return new Response(JSON.stringify({ s3Key: expectedZipKey, message: 'Export started' }), {
@@ -61,7 +74,7 @@ serve(async (req) => {
     })
 
   } catch (error) {
-    console.error(error)
+    console.error("Caught error:", error)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
