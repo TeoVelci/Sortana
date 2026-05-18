@@ -42,7 +42,18 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
+  const [readyFiles, setReadyFiles] = useState<{file: File, url: string}[] | null>(null);
   const supportsDirectToDisk = 'showSaveFilePicker' in window;
+
+  // Cleanup object URLs when modal unmounts or readyFiles changes
+  useEffect(() => {
+      if (!isOpen) setReadyFiles(null);
+      return () => {
+          if (readyFiles) {
+              readyFiles.forEach(f => URL.revokeObjectURL(f.url));
+          }
+      };
+  }, [readyFiles, isOpen]);
 
   // Enforce restrictions when plan changes (via debug tool) or on load
   useEffect(() => {
@@ -143,43 +154,16 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
                   setStatusText(p === 100 ? "Zipping..." : `Processing: ${name}`);
               });
 
-              for (let idx = 0; idx < blobs.length; idx++) {
-                  const blob = blobs[idx];
+              const generatedFiles = blobs.map((blob, idx) => {
                   const fileName = blobs.length === 1 ? `Sortana_Export_${Date.now()}.zip` : `Sortana_Export_${Date.now()}_Part${idx + 1}.zip`;
-                  
                   const file = new File([blob], fileName, { type: 'application/zip' });
-                  
-                  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                      try {
-                          await navigator.share({
-                              files: [file],
-                              title: fileName,
-                          });
-                      } catch (err: any) {
-                          if (err.name !== 'AbortError') {
-                              console.error("Share failed, falling back to download:", err);
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement('a');
-                              a.href = url;
-                              a.download = fileName;
-                              document.body.appendChild(a);
-                              a.click();
-                              document.body.removeChild(a);
-                              setTimeout(() => URL.revokeObjectURL(url), 1000);
-                          }
-                      }
-                  } else {
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = fileName;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      setTimeout(() => URL.revokeObjectURL(url), 1000);
-                  }
-              }
-              showToast("Export complete!", "success");
+                  const url = URL.createObjectURL(blob);
+                  return { file, url };
+              });
+              
+              setReadyFiles(generatedFiles);
+              setStatusText("Ready to save!");
+              return; // Wait for user to click the Save button
           }
           onClose();
       } catch (e) {
@@ -408,7 +392,49 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
 
             {/* Footer */}
             <div className="p-6 border-t border-gray-200 dark:border-dark-700 bg-gray-50 dark:bg-dark-800">
-                {isExporting ? (
+                {readyFiles ? (
+                    <div className="flex justify-between items-center w-full animate-in fade-in zoom-in duration-300">
+                        <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                            <i className="fa-solid fa-circle-check mr-2"></i>
+                            Ready to save! ({readyFiles.length} {readyFiles.length === 1 ? 'file' : 'files'})
+                        </span>
+                        <button 
+                            onClick={async () => {
+                                for (const { file, url } of readyFiles) {
+                                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                                        try {
+                                            await navigator.share({
+                                                files: [file],
+                                                title: file.name,
+                                            });
+                                        } catch (err: any) {
+                                            if (err.name !== 'AbortError') {
+                                                const a = document.createElement('a');
+                                                a.href = url;
+                                                a.download = file.name;
+                                                document.body.appendChild(a);
+                                                a.click();
+                                            }
+                                        }
+                                    } else {
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = file.name;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                    }
+                                }
+                                showToast("Saved successfully!", "success");
+                                onClose();
+                                setReadyFiles(null);
+                            }}
+                            className="px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl shadow-lg shadow-green-500/20 font-bold transition-transform active:scale-95 flex items-center gap-2"
+                        >
+                            <i className="fa-solid fa-save"></i>
+                            Save to Device
+                        </button>
+                    </div>
+                ) : isExporting ? (
                     <div className="space-y-2">
                         <div className="flex justify-between text-xs font-medium text-gray-600 dark:text-gray-300">
                             <span>{statusText}</span>
