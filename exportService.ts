@@ -188,7 +188,6 @@ export const generateChunkedZips = async (
 
     for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
         const chunk = chunks[chunkIdx];
-        const zip = new JSZip();
         const results: { [id: string]: { blob: Blob, finalName: string, folderPath: string } } = {};
         const queue = [...chunk.map((f, index) => ({ item: f, index, retries: 0 }))];
         
@@ -321,22 +320,25 @@ export const generateChunkedZips = async (
 
         await Promise.all(workers);
 
-        // Add to Zip
+        // Add to Zip via client-zip
+        const zipInputs = [];
         for (const item of chunk) {
             const res = results[item.id];
             if (res) {
-                zip.file(res.folderPath + res.finalName, res.blob);
+                const lastModified = item.createdAt ? new Date(item.createdAt) : new Date();
+                zipInputs.push({ name: res.folderPath + res.finalName, lastModified, input: res.blob });
                 if (options.includeXmp && (item.rating || item.flag || (item.tags && item.tags.length > 0))) {
                     const xmpContent = createXMP(item);
                     const xmpName = res.finalName.substring(0, res.finalName.lastIndexOf('.')) + '.xmp';
-                    zip.file(res.folderPath + xmpName, xmpContent);
+                    zipInputs.push({ name: res.folderPath + xmpName, lastModified, input: xmpContent });
                 }
             }
         }
 
-        if (Object.keys(zip.files).length > 0) {
+        if (zipInputs.length > 0) {
             if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Finalizing ZIP Part ${chunkIdx + 1} of ${chunks.length}...`);
-            const chunkBlob = await zip.generateAsync({ type: 'blob' });
+            const response = await downloadZip(zipInputs);
+            const chunkBlob = await response.blob();
             zipBlobs.push(chunkBlob);
         }
     }
