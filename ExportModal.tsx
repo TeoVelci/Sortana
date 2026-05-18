@@ -137,22 +137,48 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
                   }
               }
           } else {
-              // Safari Fallback
+              // Safari / Mobile Fallback
               const blobs = await generateChunkedZips(files, items, options, (p, name) => {
                   setProgress(p);
                   setStatusText(p === 100 ? "Zipping..." : `Processing: ${name}`);
               });
 
-              blobs.forEach((blob, idx) => {
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = blobs.length === 1 ? `Sortana_Export_${Date.now()}.zip` : `Sortana_Export_${Date.now()}_Part${idx + 1}.zip`;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  setTimeout(() => URL.revokeObjectURL(url), 1000);
-              });
+              for (let idx = 0; idx < blobs.length; idx++) {
+                  const blob = blobs[idx];
+                  const fileName = blobs.length === 1 ? `Sortana_Export_${Date.now()}.zip` : `Sortana_Export_${Date.now()}_Part${idx + 1}.zip`;
+                  
+                  const file = new File([blob], fileName, { type: 'application/zip' });
+                  
+                  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                      try {
+                          await navigator.share({
+                              files: [file],
+                              title: fileName,
+                          });
+                      } catch (err: any) {
+                          if (err.name !== 'AbortError') {
+                              console.error("Share failed, falling back to download:", err);
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = fileName;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              setTimeout(() => URL.revokeObjectURL(url), 1000);
+                          }
+                      }
+                  } else {
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = fileName;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      setTimeout(() => URL.revokeObjectURL(url), 1000);
+                  }
+              }
               showToast("Export complete!", "success");
           }
           onClose();

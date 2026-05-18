@@ -151,7 +151,8 @@ export const generateChunkedZips = async (
     let filesAdded = 0;
     const CONCURRENCY_LIMIT = 3;
     const MAX_RETRIES = 5;
-    const MAX_ZIP_SIZE = 300 * 1024 * 1024; // 300MB chunk size
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const MAX_ZIP_SIZE = isMobile ? 100 * 1024 * 1024 : 300 * 1024 * 1024; // 100MB chunk for mobile, 300MB for desktop
     
     const files = itemsToExport.filter(i => i.type === 'file');
     if (files.length === 0) throw new Error("No files to export");
