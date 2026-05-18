@@ -206,12 +206,15 @@ export const generateChunkedZips = async (
                         const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && targetFormat !== 'original'));
 
                         let inputData: Blob | Response | undefined;
+                        if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `[DBG1] Checking DB: ${item.name}`);
                         let blob = await getFileFromDB(item.id);
+                        if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `[DBG2] DB Result: ${!!blob}`);
 
                         if (needsConversion || needsWatermark) {
                             if (!blob && item.s3Key) {
-                                if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Cloud Fetch: ${item.name}`);
+                                if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `[DBG3] S3 Fetch: ${item.name}`);
                                 blob = await fetchFromS3(item.s3Key);
+                                if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `[DBG4] S3 Result: ${!!blob}`);
                             }
                             if (!blob) throw new Error(`Data missing for ${item.name}`);
 
@@ -219,6 +222,7 @@ export const generateChunkedZips = async (
                             let canProcess = true;
 
                             if (isRaw) {
+                                if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `[DBG5] RAW Preview: ${item.name}`);
                                 const preview = await processFileForDisplay(new File([blob], item.name));
                                 if (preview) {
                                     sourceBlob = preview;
@@ -231,6 +235,7 @@ export const generateChunkedZips = async (
                             if (canProcess && sourceBlob) {
                                 let processedBlob: Blob | null = null;
                                 try {
+                                    if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `[DBG6] Watermarking: ${item.name}`);
                                     if (needsWatermark) {
                                         processedBlob = await applyWatermark(sourceBlob, options.watermark.text, options.watermark.opacity, options.watermark.position, targetFormat);
                                     } else if (needsConversion) {
@@ -251,7 +256,7 @@ export const generateChunkedZips = async (
                             if (blob) {
                                 inputData = blob;
                             } else if (item.s3Key) {
-                                if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Streaming: ${item.name}`);
+                                if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `[DBG7] S3 Stream: ${item.name}`);
                                 const url = getPublicUrl(item.s3Key);
                                 const response = await fetch(url);
                                 if (!response.ok) throw new Error(`Download failed: ${response.status}`);
@@ -291,7 +296,9 @@ export const generateChunkedZips = async (
                         const folderPath = getPath(item);
                         const lastModified = item.createdAt ? new Date(item.createdAt) : new Date();
                         
+                        if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `[DBG8] Yielding: ${finalName}`);
                         yield { name: folderPath + finalName, lastModified, input: inputData };
+                        if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `[DBG9] Yielded: ${finalName}`);
 
                         if (options.includeXmp && (item.rating || item.flag || (item.tags && item.tags.length > 0))) {
                             const xmpContent = createXMP(item);
