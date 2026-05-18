@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp, FileSystemItem } from './AppContext';
 import { useTour } from './TourContext';
-import { generateStreamingZip, generateChunkedZips, ExportOptions, generateCloudExport } from './exportService';
-import { getPublicUrl } from './storageService';
+import { generateStreamingZip, generateChunkedZips, ExportOptions } from './exportService';
 import { useToast } from './ToastContext';
 
 interface ExportModalProps {
@@ -114,49 +113,53 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
       };
 
       try {
-          // Cloud Export
-          setStatusText("Initializing cloud export...");
-          const zipS3Key = await generateCloudExport(files, items, options);
-          
-          setStatusText("Cloud processing... This may take a minute.");
-          
-          // Poll until the ZIP file exists
-          let fileReady = false;
-          let retries = 0;
-          const maxRetries = 60; // 5 minutes (5s * 60)
-          const publicUrl = getPublicUrl(zipS3Key);
-
-          while (!fileReady && retries < maxRetries) {
-              await new Promise(res => setTimeout(res, 5000)); // Wait 5 seconds
+          if (directToDisk && supportsDirectToDisk) {
+              const response = await generateStreamingZip(files, items, options, (p, name) => {
+                  setProgress(p);
+                  setStatusText(p === 100 ? "Zipping..." : `Processing: ${name}`);
+              });
+              
               try {
-                  const checkRes = await fetch(publicUrl, { method: 'HEAD' });
-                  if (checkRes.ok) {
-                      fileReady = true;
+                  const fileHandle = await (window as any).showSaveFilePicker({
+                      suggestedName: `Sortana_Export_${Date.now()}.zip`,
+                      types: [{
+                          description: 'ZIP Archive',
+                          accept: { 'application/zip': ['.zip'] },
+                      }],
+                  });
+                  const writable = await fileHandle.createWritable();
+                  setStatusText("Saving to disk...");
+                  await response.body!.pipeTo(writable);
+                  showToast("Export complete!", "success");
+              } catch (err: any) {
+                  if (err.name !== 'AbortError') {
+                      console.error("Save to disk failed:", err);
+                      throw err;
                   }
-              } catch (e) {
-                  // Ignore fetch errors during polling
               }
-              retries++;
-              setProgress(Math.min(99, Math.round((retries / maxRetries) * 100)));
-          }
-
-          if (fileReady) {
-              setStatusText("Download starting...");
-              const a = document.createElement('a');
-              a.href = publicUrl;
-              a.download = `Sortana_Export_${Date.now()}.zip`;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              showToast("Export complete!", "success");
           } else {
-              throw new Error("Export timed out. Please try again.");
+              // Safari Fallback
+              const blobs = await generateChunkedZips(files, items, options, (p, name) => {
+                  setProgress(p);
+                  setStatusText(p === 100 ? "Zipping..." : `Processing: ${name}`);
+              });
+
+              blobs.forEach((blob, idx) => {
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = blobs.length === 1 ? `Sortana_Export_${Date.now()}.zip` : `Sortana_Export_${Date.now()}_Part${idx + 1}.zip`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+              });
+              showToast("Export complete!", "success");
           }
-          
           onClose();
-      } catch (e: any) {
+      } catch (e) {
           console.error(e);
-          showToast(e.message || "Export failed.", "error");
+          showToast("Export failed.", "error");
       } finally {
           setIsExporting(false);
           setProgress(0);

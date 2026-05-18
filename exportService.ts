@@ -5,7 +5,6 @@ import { getFileFromDB } from './dbService';
 import { FileSystemItem } from './AppContext';
 import { processFileForDisplay } from './aiService';
 import { downloadFileFromS3 } from './storageService';
-import { supabase } from './supabaseClient';
 
 export interface ExportOptions {
     fileNamePattern: 'original' | 'sequence';
@@ -140,98 +139,7 @@ const fetchFromS3 = async (key: string): Promise<Blob | null> => {
 };
 
 /**
- * Main Export Logic (Cloud)
- */
-export const generateCloudExport = async (
-    itemsToExport: FileSystemItem[], 
-    allItems: FileSystemItem[], 
-    options: ExportOptions
-): Promise<string> => {
-    const files = itemsToExport.filter(i => i.type === 'file');
-    if (files.length === 0) throw new Error("No files to export");
-
-    const getPath = (item: FileSystemItem): string => {
-        if (options.structure === 'flat' || !item.parentId) return '';
-        const pathParts = [];
-        let curr = allItems.find(i => i.id === item.parentId);
-        while(curr) {
-            pathParts.unshift(curr.name);
-            curr = curr.parentId ? allItems.find(i => i.id === curr.parentId) : undefined;
-        }
-        return pathParts.join('/') + '/';
-    };
-
-    const usedNames = new Set<string>();
-
-    const payloadFiles = files.map((item, index) => {
-        let extension = item.name.split('.').pop() || 'jpg';
-        let finalName = item.name;
-
-        // If it's a RAW file, and we are not doing "Original" format, we convert it to jpg/png
-        const isRaw = item.fileType === 'raw';
-        const targetFormat = options.format;
-        const needsConversion = targetFormat !== 'original';
-        const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && targetFormat !== 'original'));
-
-        if (needsConversion || needsWatermark) {
-            if (targetFormat === 'png') extension = 'png';
-            else if (targetFormat === 'jpg') extension = 'jpg';
-        }
-
-        if (options.fileNamePattern === 'sequence') {
-            const seq = (index + 1).toString().padStart(3, '0');
-            const base = options.baseName || 'Export';
-            finalName = `${base}_${seq}.${extension}`;
-        } else {
-            const nameParts = item.name.split('.');
-            nameParts.pop();
-            finalName = `${nameParts.join('.')}.${extension}`;
-        }
-
-        if (options.structure === 'flat') {
-            let dedupName = finalName;
-            let c = 1;
-            while (usedNames.has(dedupName)) {
-                const parts = finalName.split('.');
-                const ext = parts.pop();
-                dedupName = `${parts.join('.')}_${c}.${ext}`;
-                c++;
-            }
-            finalName = dedupName;
-            usedNames.add(finalName);
-        }
-
-        const folderPath = getPath(item);
-        
-        let xmpString: string | null = null;
-        if (options.includeXmp && (item.rating || item.flag || (item.tags && item.tags.length > 0))) {
-            xmpString = createXMP(item);
-        }
-
-        return {
-            s3Key: item.s3Key,
-            finalName,
-            folderPath,
-            xmpString
-        };
-    });
-
-    const { data, error } = await supabase.functions.invoke('trigger-export', {
-        body: {
-            files: payloadFiles,
-            options
-        }
-    });
-
-    if (error) {
-        throw new Error(error.message || "Failed to trigger cloud export");
-    }
-
-    return data.s3Key;
-};
-
-/**
- * Main Export Logic (Legacy Local)
+ * Main Export Logic
  */
 export const generateChunkedZips = async (
     itemsToExport: FileSystemItem[], 
@@ -547,7 +455,7 @@ export const generateStreamingZip = async (
                     }
 
                     const folderPath = getPath(item);
-                    const lastModified = (item as any).created_at ? new Date((item as any).created_at) : new Date();
+                    const lastModified = item.createdAt ? new Date(item.createdAt) : new Date();
 
                     yield { name: folderPath + finalName, lastModified, input: blob };
                     
