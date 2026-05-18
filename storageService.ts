@@ -60,12 +60,17 @@ export const downloadFileFromS3 = async (key: string): Promise<Blob> => {
  * The edge function returns a 302 redirect to the temporary presigned S3 URL,
  * meaning this URL can safely be used directly in <img src="..." />.
  */
-export const getPublicUrl = (key: string): string => {
+export const getPublicUrl = (key: string, download: boolean = false, filename?: string): string => {
   if (!key) return '';
   // Format the direct function URL. 
   // We cannot use supabase.functions.invoke() synchronously, 
   // so we build the public endpoint directly.
-  return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-aws-presigned-url?key=${encodeURIComponent(key)}`;
+  let url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-aws-presigned-url?key=${encodeURIComponent(key)}`;
+  if (download) {
+    url += `&download=true`;
+    if (filename) url += `&filename=${encodeURIComponent(filename)}`;
+  }
+  return url;
 };
 
 export const saveFileMetadata = async (

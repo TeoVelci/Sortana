@@ -34,10 +34,19 @@ serve(async (req) => {
         return new Response("Missing key", { status: 400, headers: corsHeaders });
       }
 
-      const command = new GetObjectCommand({
+      const commandParams: any = {
         Bucket: bucketName,
         Key: key,
-      });
+      };
+
+      const isDownload = url.searchParams.get('download') === 'true';
+      const downloadFilename = url.searchParams.get('filename') || 'download';
+      
+      if (isDownload) {
+        commandParams.ResponseContentDisposition = `attachment; filename="${downloadFilename}"`;
+      }
+
+      const command = new GetObjectCommand(commandParams);
 
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
       

@@ -159,7 +159,7 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
                   const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && options.format !== 'original'));
                   
                   if (!needsConversion && !needsWatermark && item.s3Key) {
-                      const url = getPublicUrl(item.s3Key);
+                      const url = getPublicUrl(item.s3Key, true, item.name);
                       const a = document.createElement('a');
                       a.href = url;
                       a.download = item.name;
