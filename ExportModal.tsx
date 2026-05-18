@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp, FileSystemItem } from './AppContext';
 import { useTour } from './TourContext';
-import { generateStreamingZip, generateChunkedZips, ExportOptions, generateCloudExport, checkExportStatus } from './exportService';
+import { generateStreamingZip, generateChunkedZips, ExportOptions, generateCloudExport } from './exportService';
 import { getPublicUrl } from './storageService';
 import { useToast } from './ToastContext';
 
@@ -129,12 +129,12 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
           while (!fileReady && retries < maxRetries) {
               await new Promise(res => setTimeout(res, 5000)); // Wait 5 seconds
               try {
-                  const isReady = await checkExportStatus(zipS3Key);
-                  if (isReady) {
+                  const checkRes = await fetch(publicUrl, { method: 'HEAD' });
+                  if (checkRes.ok) {
                       fileReady = true;
                   }
               } catch (e) {
-                  // Ignore check errors during polling
+                  // Ignore fetch errors during polling
               }
               retries++;
               setProgress(Math.min(99, Math.round((retries / maxRetries) * 100)));

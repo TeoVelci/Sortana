@@ -25,8 +25,8 @@ serve(async (req) => {
     const bucketName = Deno.env.get('AWS_BUCKET_NAME');
     if (!bucketName) throw new Error("Missing AWS_BUCKET_NAME in environment secrets");
 
-    // Handle GET and HEAD requests for viewing/downloading files
-    if (req.method === 'GET' || req.method === 'HEAD') {
+    // Handle GET request for viewing/downloading files
+    if (req.method === 'GET') {
       const url = new URL(req.url);
       const key = url.searchParams.get('key');
       
@@ -37,7 +37,6 @@ serve(async (req) => {
       const command = new GetObjectCommand({
         Bucket: bucketName,
         Key: key,
-        ResponseContentDisposition: `attachment; filename="Sortana_Export_${Date.now()}.zip"`
       });
 
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
