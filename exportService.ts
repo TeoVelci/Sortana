@@ -216,18 +216,10 @@ export const generateCloudExport = async (
         };
     });
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-        throw new Error("Your login session has expired. Please refresh the page or log out and log back in to export.");
-    }
-
     const { data, error } = await supabase.functions.invoke('trigger-export', {
         body: {
             files: payloadFiles,
             options
-        },
-        headers: {
-            Authorization: `Bearer ${session.access_token}`
         }
     });
 
@@ -245,18 +237,9 @@ export const generateCloudExport = async (
 
 export const checkExportStatus = async (s3Key: string): Promise<boolean> => {
     try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) {
-            console.error("Session expired while checking export status");
-            return false;
-        }
-
         const { data, error } = await supabase.functions.invoke('check-export-status', {
             body: { key: s3Key },
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${session.access_token}`
-            }
+            method: 'POST'
         });
         
         if (error) {
