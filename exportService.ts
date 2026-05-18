@@ -257,7 +257,9 @@ export const generateChunkedZips = async (
                                 inputData = blob;
                             } else if (item.s3Key) {
                                 if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `[DBG7] S3 Stream: ${item.name}`);
-                                const response = await fetchDirectS3Response(item.s3Key);
+                                const response = await fetchDirectS3Response(item.s3Key, (msg) => {
+                                    if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), msg);
+                                });
                                 if (!response.ok) throw new Error(`Download failed: ${response.status}`);
                                 inputData = response;
                             } else {

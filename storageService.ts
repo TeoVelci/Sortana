@@ -48,13 +48,18 @@ export const uploadFileToS3 = async (file: File | Blob, url: string, retries = 3
 /**
  * Gets a public URL for a file via the Edge Function.
  */
-export const fetchDirectS3Response = async (key: string): Promise<Response> => {
+export const fetchDirectS3Response = async (key: string, onProgress?: (msg: string) => void): Promise<Response> => {
+  if (onProgress) onProgress(`[DBG7A] Fetching Edge URL`);
   const edgeUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-aws-presigned-url?key=${encodeURIComponent(key)}&redirect=false`;
   const res = await fetch(edgeUrl);
   if (!res.ok) throw new Error(`Edge Function error: ${res.status}`);
+  if (onProgress) onProgress(`[DBG7B] Parsing Edge JSON`);
   const data = await res.json();
   if (!data.url) throw new Error("No presigned URL returned");
-  return fetch(data.url);
+  if (onProgress) onProgress(`[DBG7C] Fetching S3 URL`);
+  const s3Res = await fetch(data.url);
+  if (onProgress) onProgress(`[DBG7D] S3 Fetch Complete`);
+  return s3Res;
 };
 
 export const downloadFileFromS3 = async (key: string): Promise<Blob> => {
