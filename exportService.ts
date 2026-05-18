@@ -4,7 +4,7 @@ import { downloadZip } from 'client-zip';
 import { getFileFromDB } from './dbService';
 import { FileSystemItem } from './AppContext';
 import { processFileForDisplay } from './aiService';
-import { downloadFileFromS3, getPublicUrl } from './storageService';
+import { downloadFileFromS3, getPublicUrl, fetchDirectS3Response } from './storageService';
 
 export interface ExportOptions {
     fileNamePattern: 'original' | 'sequence';
@@ -257,8 +257,7 @@ export const generateChunkedZips = async (
                                 inputData = blob;
                             } else if (item.s3Key) {
                                 if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `[DBG7] S3 Stream: ${item.name}`);
-                                const url = getPublicUrl(item.s3Key);
-                                const response = await fetch(url);
+                                const response = await fetchDirectS3Response(item.s3Key);
                                 if (!response.ok) throw new Error(`Download failed: ${response.status}`);
                                 inputData = response;
                             } else {
@@ -451,8 +450,7 @@ export const generateStreamingZip = async (
                             inputData = blob;
                         } else if (item.s3Key) {
                             if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Downloading: ${item.name}`);
-                            const url = getPublicUrl(item.s3Key);
-                            const response = await fetch(url);
+                            const response = await fetchDirectS3Response(item.s3Key);
                             if (!response.ok) throw new Error(`Download failed: ${response.status}`);
                             inputData = response;
                         }
