@@ -165,12 +165,25 @@ export const handler = async (event) => {
                 archive.append(fileStream, { name: file.folderPath + file.finalName });
             }
 
-            // Await the stream to finish before fetching the next file
-            // This prevents opening 20 concurrent S3 sockets which would timeout
+            // We must wait for the current stream to finish appending to prevent 
+            // AWS SDK from opening 41 concurrent S3 requests that might timeout.
+            // When appending a stream to Archiver, we can wait for the stream to end
+            // OR we can just wait for the original stream to end if it's not piped.
+            // Archiver will consume it, so listening to 'end' on streamToAwait works,
+            // but for Sharp pipelines, it might be 'finish'.
             await new Promise((resolve, reject) => {
-                streamToAwait.on('end', resolve);
-                streamToAwait.on('close', resolve);
-                streamToAwait.on('error', reject);
+                const onEnd = () => { cleanup(); resolve(); };
+                const onError = (e) => { cleanup(); reject(e); };
+                const cleanup = () => {
+                    streamToAwait.removeListener('end', onEnd);
+                    streamToAwait.removeListener('finish', onEnd);
+                    streamToAwait.removeListener('close', onEnd);
+                    streamToAwait.removeListener('error', onError);
+                };
+                streamToAwait.on('end', onEnd);
+                streamToAwait.on('finish', onEnd);
+                streamToAwait.on('close', onEnd);
+                streamToAwait.on('error', onError);
             });
         }
 
