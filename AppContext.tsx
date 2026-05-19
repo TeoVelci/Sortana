@@ -252,20 +252,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const triggerDownload = useCallback((job: ExportJob) => {
       if (!job.s3_key) return;
-      getPresignedUrl(job.s3_key).then(url => {
-         if (url) {
-             showToast("Downloading...", "success");
-             const a = document.createElement('a');
-             a.href = url;
-             a.download = 'Sortana_Export.zip';
-             document.body.appendChild(a);
-             a.click();
-             document.body.removeChild(a);
-             markExportAsSeen(job.id);
-         } else {
-             showToast("Failed to get download URL.", "error");
-         }
-      });
+      const url = getPublicUrl(job.s3_key, true, 'Sortana_Export.zip');
+      if (url) {
+          showToast("Downloading...", "success");
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'Sortana_Export.zip';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          markExportAsSeen(job.id);
+      } else {
+          showToast("Failed to get download URL.", "error");
+      }
   }, [showToast, markExportAsSeen]);
 
   // Sync Auth State & Fetch Data
@@ -367,20 +366,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setExportHistory(prev => prev.map(job => job.id === newRecord.id ? newRecord : job));
             
             if (newRecord.status === 'completed' && newRecord.s3_key) {
-              getPresignedUrl(newRecord.s3_key).then(url => {
-                 if (url) {
-                     showToast("Export completed! Downloading...", "success");
-                     const a = document.createElement('a');
-                     a.href = url;
-                     a.download = 'Sortana_Export.zip';
-                     document.body.appendChild(a);
-                     a.click();
-                     document.body.removeChild(a);
-                     markExportAsSeen(newRecord.id);
-                 } else {
-                     showToast("Export completed, but failed to get download URL.", "error");
-                 }
-              });
+              const url = getPublicUrl(newRecord.s3_key, true, 'Sortana_Export.zip');
+              if (url) {
+                  showToast("Export completed! Downloading...", "success");
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'Sortana_Export.zip';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  markExportAsSeen(newRecord.id);
+              } else {
+                  showToast("Export completed, but failed to get download URL.", "error");
+              }
             } else if (newRecord.status === 'failed') {
               showToast("Export failed to complete.", "error");
             }
