@@ -47,8 +47,9 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } }
     });
 
-    // We can use the passed userId or get it securely from auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // We must pass the token explicitly to getUser in Edge Functions
+    const token = authHeader.replace('Bearer ', '').trim();
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError) {
       throw new Error(`Auth Error: ${authError.message}`);
     }
