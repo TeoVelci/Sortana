@@ -10,7 +10,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const { user, storage, getStoragePercentage, formatSize, logout, undo, redo, canUndo, canRedo, historyDescription, syncQueue, setCurrentFolderId } = useApp();
+  const { user, storage, getStoragePercentage, formatSize, logout, undo, redo, canUndo, canRedo, historyDescription, syncQueue, setCurrentFolderId, exportHistory, seenExportIds, triggerDownload } = useApp();
   const { showToast } = useToast();
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
@@ -182,6 +182,50 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <div className="bg-primary h-full rounded-full shadow-[0_0_5px_rgba(99,102,241,0.5)]" style={{ width: `${storagePercent}%` }}></div>
             </div>
             <span className="text-[10px] text-gray-500 dark:text-gray-400">{formatSize(storage.usedBytes)} / {formatSize(storage.limitBytes)}</span>
+          </div>
+
+          {/* Exports Hub */}
+          <div className="relative group hidden sm:flex items-center">
+            <button className="relative w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
+              <i className="fa-solid fa-box-archive text-sm"></i>
+              {exportHistory.filter(job => job.status === 'completed' && !seenExportIds.includes(job.id)).length > 0 && (
+                <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 border-2 border-white dark:border-background-dark rounded-full"></span>
+              )}
+            </button>
+            <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-surface-dark border border-gray-200 dark:border-white/10 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all transform origin-top-right z-50 overflow-hidden flex flex-col max-h-96">
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5">
+                <h3 className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Recent Exports</h3>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {exportHistory.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-gray-500">No recent exports.</div>
+                ) : (
+                  exportHistory.map(job => (
+                    <button
+                      key={job.id}
+                      onClick={() => job.status === 'completed' && triggerDownload(job)}
+                      className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 flex flex-col gap-1 transition-colors ${!seenExportIds.includes(job.id) && job.status === 'completed' ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          {job.total_files ? `${job.total_files} items` : 'Export'}
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          job.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
+                          job.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
+                          'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
+                        }`}>
+                          {job.status}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {new Date(job.created_at).toLocaleString()}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="hidden md:flex items-center gap-2 group relative">

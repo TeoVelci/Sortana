@@ -84,6 +84,14 @@ interface HistoryAction {
     redo: () => void;
 }
 
+export interface ExportJob {
+  id: string;
+  status: 'pending' | 'completed' | 'failed';
+  s3_key: string | null;
+  created_at: string;
+  total_files?: number;
+}
+
 interface AppContextType {
   user: User;
   isAuthenticated: boolean;
@@ -91,6 +99,12 @@ interface AppContextType {
   items: FileSystemItem[];
   recentActivity: Activity[];
   viewState: ViewState;
+  
+  // Exports
+  exportHistory: ExportJob[];
+  seenExportIds: string[];
+  markExportAsSeen: (id: string) => void;
+  triggerDownload: (job: ExportJob) => void;
   
   // Navigation State
   currentFolderId: string | null;
@@ -203,6 +217,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Global Navigation State
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
 
+  // Export History State
+  const [exportHistory, setExportHistory] = useState<ExportJob[]>([]);
+  const [seenExportIds, setSeenExportIds] = useState<string[]>(() => loadState('sortana_seen_exports', []));
+
+  useEffect(() => localStorage.setItem('sortana_seen_exports', JSON.stringify(seenExportIds)), [seenExportIds]);
+
+  const fetchExports = useCallback(async () => {
+    if (!session?.user?.id) return;
+    const { data } = await supabase
+      .from('export_jobs')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (data) {
+      setExportHistory(data as ExportJob[]);
+    }
+  }, [session?.user?.id]);
+
+  const markExportAsSeen = useCallback((id: string) => {
+    setSeenExportIds(prev => {
+      if (prev.includes(id)) return prev;
+      return [...prev, id];
+    });
+  }, []);
+
+  const triggerDownload = useCallback((job: ExportJob) => {
+      if (!job.s3_key) return;
+      getPresignedUrl(job.s3_key).then(url => {
+         if (url) {
+             showToast("Downloading...", "success");
+             const a = document.createElement('a');
+             a.href = url;
+             a.download = 'Sortana_Export.zip';
+             document.body.appendChild(a);
+             a.click();
+             document.body.removeChild(a);
+             markExportAsSeen(job.id);
+         } else {
+             showToast("Failed to get download URL.", "error");
+         }
+      });
+  }, [showToast, markExportAsSeen]);
+
   // Sync Auth State & Fetch Data
   useEffect(() => {
     setIsAuthenticated(!!session);
@@ -236,11 +294,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
             setItems(cleanedItems);
         });
+
+        fetchExports();
     } else {
         // Clear items on logout
         setItems([]);
+        setExportHistory([]);
     }
-  }, [session]);
+  }, [session, fetchExports]);
 
   // File Cache now stores actual File objects, populated on upload or rehydration from DB
   const [fileCache, setFileCache] = useState<Map<string, File>>(new Map());
@@ -289,6 +350,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         },
         (payload) => {
           if (payload.new.status === 'completed' && payload.new.s3_key) {
+            fetchExports(); // Refresh export history dropdown
             getPresignedUrl(payload.new.s3_key).then(url => {
                if (url) {
                    showToast("Export completed! Downloading...", "success");
@@ -298,11 +360,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                    document.body.appendChild(a);
                    a.click();
                    document.body.removeChild(a);
+                   markExportAsSeen(payload.new.id);
                } else {
                    showToast("Export completed, but failed to get download URL.", "error");
                }
             });
           } else if (payload.new.status === 'failed') {
+            fetchExports();
             showToast("Export failed to complete.", "error");
           }
         }
@@ -1621,6 +1685,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       items,
       recentActivity,
       viewState,
+      exportHistory,
+      seenExportIds,
+      markExportAsSeen,
+      triggerDownload,
       currentFolderId,
       setCurrentFolderId,
       login,
