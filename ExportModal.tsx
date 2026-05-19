@@ -287,7 +287,17 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
 
               if (error) {
                   console.error("Export Error:", error);
-                  const errorMessage = error.message || error.toString() || "Unknown error";
+                  let errorMessage = error.message || error.toString() || "Unknown error";
+                  
+                  if (error.context && typeof error.context.json === 'function') {
+                      try {
+                          const errorBody = await error.context.json();
+                          errorMessage = errorBody.error || errorBody.message || errorMessage;
+                      } catch (e) {
+                          console.error("Failed to parse error context", e);
+                      }
+                  }
+                  
                   showToast(`Failed to start export: ${errorMessage}`, "error");
               } else {
                   showToast("Export started in background. You will be notified when ready.", "success");
