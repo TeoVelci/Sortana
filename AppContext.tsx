@@ -232,7 +232,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .order('created_at', { ascending: false })
       .limit(10);
     if (data) {
-      setExportHistory(data as ExportJob[]);
+      const processedData = (data as ExportJob[]).map(job => {
+        // Mark pending jobs older than 1 hour as failed
+        if (job.status === 'pending' && new Date(job.created_at).getTime() < Date.now() - 60 * 60 * 1000) {
+          return { ...job, status: 'failed' };
+        }
+        return job;
+      });
+      setExportHistory(processedData);
     }
   }, [session?.user?.id]);
 
