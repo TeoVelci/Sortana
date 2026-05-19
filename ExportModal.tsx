@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp, FileSystemItem } from './AppContext';
 import { useTour } from './TourContext';
-import { generateStreamingZip, generateChunkedZips, ExportOptions } from './exportService';
+import { generateStreamingZip, calculateExportChunks, generateCloudExportPayload, ExportChunk, ExportOptions } from './exportService';
 import { useToast } from './ToastContext';
 import { getPublicUrl } from './storageService';
 
@@ -44,6 +44,9 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
   const [readyFiles, setReadyFiles] = useState<{file: File, url: string}[] | null>(null);
+  const [exportChunks, setExportChunks] = useState<ExportChunk[] | null>(null);
+  const [readyChunks, setReadyChunks] = useState<Record<number, {file: File, url: string}>>({});
+  const [loadingChunkIndex, setLoadingChunkIndex] = useState<number | null>(null);
   const supportsDirectToDisk = 'showSaveFilePicker' in window;
 
   // Cleanup object URLs when modal unmounts or readyFiles changes
@@ -99,6 +102,90 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
       return files;
   };
 
+  const handleDownloadChunk = async (chunk: ExportChunk) => {
+      // Clear previously generated chunk to ensure WebKit stays within 400MB memory limit
+      setReadyChunks(prev => {
+          Object.values(prev).forEach(r => URL.revokeObjectURL(r.url));
+          return {};
+      });
+
+      setLoadingChunkIndex(chunk.index);
+      setProgress(0);
+      setStatusText(`Preparing Part ${chunk.index}...`);
+
+      const options: ExportOptions = {
+          fileNamePattern: pattern,
+          baseName: baseName,
+          format: format,
+          structure: structure,
+          includeXmp: includeXmp,
+          watermark: {
+              enabled: watermarkEnabled,
+              text: watermarkText,
+              opacity: watermarkOpacity,
+              position: watermarkPos
+          }
+      };
+
+      try {
+          const response = await generateStreamingZip(chunk.files, items, options, (p, name) => {
+              setProgress(p);
+              setStatusText(p === 100 ? "Zipping..." : `Processing: ${name}`);
+          });
+          
+          const reader = response.body!.getReader();
+          const blobChunks: Uint8Array[] = [];
+          while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value) blobChunks.push(value);
+          }
+          const blob = new Blob(blobChunks, { type: 'application/zip' });
+          const fileName = `Sortana_Export_${Date.now()}_Part${chunk.index}.zip`;
+          const file = new File([blob], fileName, { type: 'application/zip' });
+          const url = URL.createObjectURL(blob);
+          
+          setReadyChunks({ [chunk.index]: { file, url } });
+      } catch (e) {
+          console.error(e);
+          showToast(`Failed to generate Part ${chunk.index}`, "error");
+      } finally {
+          setLoadingChunkIndex(null);
+          setProgress(0);
+      }
+  };
+
+  const handleSaveChunk = async (chunkIndex: number) => {
+      const ready = readyChunks[chunkIndex];
+      if (!ready) return;
+
+      if (navigator.canShare && navigator.canShare({ files: [ready.file] })) {
+          try {
+              await navigator.share({
+                  files: [ready.file],
+                  title: ready.file.name,
+              });
+          } catch (err: any) {
+              if (err.name !== 'AbortError') {
+                  const a = document.createElement('a');
+                  a.href = ready.url;
+                  a.download = ready.file.name;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+              }
+          }
+      } else {
+          const a = document.createElement('a');
+          a.href = ready.url;
+          a.download = ready.file.name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+      }
+      showToast(`Part ${chunkIndex} saved!`, "success");
+  };
+
   const handleExport = async () => {
       const files = getFilesToExport();
       if (files.length === 0) {
@@ -151,44 +238,64 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
           } else {
               // Safari / Mobile Fallback
 
-              // Single file fast-path: Skip ZIP generation and RAM limits for single unmodified files (like large videos)
-              if (files.length === 1) {
-                  const item = files[0];
-                  const isRaw = item.fileType === 'raw';
-                  const needsConversion = options.format !== 'original';
-                  const needsWatermark = options.watermark.enabled && (item.fileType === 'image' || (isRaw && options.format !== 'original'));
+              const isRaw = files.some(f => f.fileType === 'raw');
+              const needsConversion = options.format !== 'original';
+              const needsWatermark = options.watermark.enabled;
+
+              // If processing is required, we must fallback to the legacy memory chunking
+              if (needsConversion || needsWatermark) {
+                  const chunks = calculateExportChunks(files);
                   
-                  if (!needsConversion && !needsWatermark && item.s3Key) {
-                      const url = getPublicUrl(item.s3Key, true, item.name);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = item.name;
-                      // Fallback: iOS Safari might not download automatically via a.click() without target=_blank for some MIME types, but we can try
-                      a.target = '_blank';
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      showToast("Export complete!", "success");
-                      onClose();
+                  if (chunks.length === 1) {
+                      const response = await generateStreamingZip(files, items, options, (p, name) => {
+                          setProgress(p);
+                          setStatusText(p === 100 ? "Zipping..." : `Processing: ${name}`);
+                      });
+                      
+                      const reader = response.body!.getReader();
+                      const blobChunks: Uint8Array[] = [];
+                      while (true) {
+                          const { done, value } = await reader.read();
+                          if (done) break;
+                          if (value) blobChunks.push(value);
+                      }
+                      const blob = new Blob(blobChunks, { type: 'application/zip' });
+                      const url = URL.createObjectURL(blob);
+                      
+                      setReadyFiles([{ file: new File([blob], `Sortana_Export_${Date.now()}.zip`, { type: 'application/zip' }), url }]);
+                      setStatusText("Ready to save!");
+                      return;
+                  } else {
+                      setExportChunks(chunks);
+                      setStatusText("Ready to save!");
                       return;
                   }
               }
 
-              const blobs = await generateChunkedZips(files, items, options, (p, name) => {
-                  setProgress(p);
-                  setStatusText(p === 100 ? "Zipping..." : `Processing: ${name}`);
-              });
-
-              const generatedFiles = blobs.map((blob, idx) => {
-                  const fileName = blobs.length === 1 ? `Sortana_Export_${Date.now()}.zip` : `Sortana_Export_${Date.now()}_Part${idx + 1}.zip`;
-                  const file = new File([blob], fileName, { type: 'application/zip' });
-                  const url = URL.createObjectURL(blob);
-                  return { file, url };
+              // Cloud-Streaming ZIP Pipeline (No local processing needed)
+              setStatusText("Starting cloud export...");
+              const exportFiles = generateCloudExportPayload(files, items, options);
+              
+              const form = document.createElement('form');
+              form.method = 'POST';
+              form.action = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-zip`;
+              
+              const input = document.createElement('input');
+              input.type = 'hidden';
+              input.name = 'payload';
+              input.value = JSON.stringify({ 
+                  files: exportFiles, 
+                  zipName: `Sortana_Export_${Date.now()}.zip` 
               });
               
-              setReadyFiles(generatedFiles);
-              setStatusText("Ready to save!");
-              return; // Wait for user to click the Save button
+              form.appendChild(input);
+              document.body.appendChild(form);
+              form.submit();
+              document.body.removeChild(form);
+              
+              showToast("Download started", "success");
+              onClose();
+              return;
           }
           onClose();
       } catch (e) {
@@ -417,7 +524,52 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
 
             {/* Footer */}
             <div className="p-6 border-t border-gray-200 dark:border-dark-700 bg-gray-50 dark:bg-dark-800">
-                {readyFiles ? (
+                {exportChunks ? (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            <i className="fa-solid fa-layer-group text-primary mr-2"></i>
+                            Large Export: Split into {exportChunks.length} parts to save memory.
+                        </div>
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            {exportChunks.map(chunk => (
+                                <div key={chunk.index} className="flex justify-between items-center bg-white dark:bg-dark-900 border border-gray-200 dark:border-dark-700 p-3 rounded-xl shadow-sm">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Part {chunk.index}</span>
+                                        <span className="text-xs text-gray-500">{chunk.files.length} files</span>
+                                    </div>
+                                    {loadingChunkIndex === chunk.index ? (
+                                        <div className="w-32">
+                                            <div className="flex justify-between text-[10px] font-medium text-gray-500 mb-1">
+                                                <span className="truncate max-w-[80px]">{statusText}</span>
+                                                <span>{progress}%</span>
+                                            </div>
+                                            <div className="w-full h-1.5 bg-gray-200 dark:bg-dark-700 rounded-full overflow-hidden">
+                                                <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button 
+                                            onClick={() => handleDownloadChunk(chunk)}
+                                            disabled={loadingChunkIndex !== null}
+                                            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${loadingChunkIndex !== null ? 'bg-gray-200 text-gray-400 dark:bg-dark-800 dark:text-gray-600' : 'bg-brand-purple hover:bg-purple-600 text-white shadow-md active:scale-95'}`}
+                                        >
+                                            <i className="fa-solid fa-download mr-1.5"></i>
+                                            Download
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex justify-end pt-2 border-t border-gray-200 dark:border-dark-700">
+                            <button 
+                                onClick={onClose}
+                                className="px-5 py-2.5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-700 rounded-xl font-medium transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                ) : readyFiles ? (
                     <div className="flex justify-between items-center w-full animate-in fade-in zoom-in duration-300">
                         <span className="text-sm font-medium text-green-600 dark:text-green-400">
                             <i className="fa-solid fa-circle-check mr-2"></i>
