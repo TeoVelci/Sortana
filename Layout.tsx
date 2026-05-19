@@ -223,15 +223,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                           className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 flex flex-col gap-1 transition-colors ${!seenExportIds.includes(job.id) && job.status === 'completed' ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                            <span className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
                               {job.total_files ? `${job.total_files} items` : 'Export'}
+                              {job.status === 'completed' && (
+                                <i className="fa-solid fa-cloud-arrow-down text-primary opacity-80" title="Click to download"></i>
+                              )}
                             </span>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                               job.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
                               job.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
                               'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
                             }`}>
-                              {job.status}
+                              {job.status === 'completed' ? 'Ready' : job.status}
                             </span>
                           </div>
                           <span className="text-xs text-gray-500 dark:text-gray-400">

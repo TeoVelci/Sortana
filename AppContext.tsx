@@ -350,31 +350,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
           table: 'export_jobs',
           filter: `user_id=eq.${session.user.id}`
         },
         (payload) => {
-          if (payload.new.status === 'completed' && payload.new.s3_key) {
-            fetchExports(); // Refresh export history dropdown
-            getPresignedUrl(payload.new.s3_key).then(url => {
-               if (url) {
-                   showToast("Export completed! Downloading...", "success");
-                   const a = document.createElement('a');
-                   a.href = url;
-                   a.download = 'Sortana_Export.zip';
-                   document.body.appendChild(a);
-                   a.click();
-                   document.body.removeChild(a);
-                   markExportAsSeen(payload.new.id);
-               } else {
-                   showToast("Export completed, but failed to get download URL.", "error");
-               }
-            });
-          } else if (payload.new.status === 'failed') {
+          if (payload.eventType === 'INSERT') {
             fetchExports();
-            showToast("Export failed to complete.", "error");
+          } else if (payload.eventType === 'UPDATE') {
+            const newRecord = payload.new as ExportJob;
+            if (newRecord.status === 'completed' && newRecord.s3_key) {
+              fetchExports(); // Refresh export history dropdown
+              getPresignedUrl(newRecord.s3_key).then(url => {
+                 if (url) {
+                     showToast("Export completed! Downloading...", "success");
+                     const a = document.createElement('a');
+                     a.href = url;
+                     a.download = 'Sortana_Export.zip';
+                     document.body.appendChild(a);
+                     a.click();
+                     document.body.removeChild(a);
+                     markExportAsSeen(newRecord.id);
+                 } else {
+                     showToast("Export completed, but failed to get download URL.", "error");
+                 }
+              });
+            } else if (newRecord.status === 'failed') {
+              fetchExports();
+              showToast("Export failed to complete.", "error");
+            }
           }
         }
       )
