@@ -357,11 +357,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            fetchExports();
+            const newRecord = payload.new as ExportJob;
+            setExportHistory(prev => {
+              if (prev.some(job => job.id === newRecord.id)) return prev;
+              return [newRecord, ...prev].slice(0, 10);
+            });
           } else if (payload.eventType === 'UPDATE') {
             const newRecord = payload.new as ExportJob;
+            setExportHistory(prev => prev.map(job => job.id === newRecord.id ? newRecord : job));
+            
             if (newRecord.status === 'completed' && newRecord.s3_key) {
-              fetchExports(); // Refresh export history dropdown
               getPresignedUrl(newRecord.s3_key).then(url => {
                  if (url) {
                      showToast("Export completed! Downloading...", "success");
@@ -377,18 +382,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  }
               });
             } else if (newRecord.status === 'failed') {
-              fetchExports();
               showToast("Export failed to complete.", "error");
             }
           }
         }
       )
       .subscribe();
-
+      
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, showToast, markExportAsSeen]);
+
 
   useEffect(() => localStorage.setItem('sortana_activity', JSON.stringify(recentActivity)), [recentActivity]);
 
