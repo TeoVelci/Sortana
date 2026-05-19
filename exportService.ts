@@ -250,7 +250,20 @@ export const generateCloudExportPayload = (
 
         const url = getPublicUrl(item.s3Key, false);
 
-        exportFiles.push({ name: folderPath + finalName, url, size: item.size });
+        let xmpString;
+        if (options.includeXmp && (item.rating || item.flag || (item.tags && item.tags.length > 0))) {
+            xmpString = createXMP(item);
+        }
+
+        exportFiles.push({ 
+            name: folderPath + finalName, 
+            url, 
+            size: item.size,
+            s3Key: item.s3Key,
+            finalName,
+            folderPath,
+            xmpString
+        });
     }
 
     return exportFiles;
