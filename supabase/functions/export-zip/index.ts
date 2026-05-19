@@ -56,7 +56,7 @@ serve(async (req) => {
                 // Folder entry (using Unix os:3 to embed Unix permissions and MS-DOS attrs in upper bytes)
                 const f = new ZipDeflate(file.name, { level: 1 });
                 f.os = 3;
-                f.attrs = (0o40755 << 16) | 0o10;
+                f.attrs = (0o40755 << 16) | 0x10;
                 f.mtime = new Date();
                 zip.add(f);
                 f.push(new Uint8Array(0), true);
@@ -66,7 +66,7 @@ serve(async (req) => {
                   // Must use level > 0 (Deflate) and os:3 to explicitly declare as Unix with DOS fallback
                   const f = new ZipDeflate(file.name, { level: 1 });
                   f.os = 3;
-                  f.attrs = (0o100644 << 16) | 0o0;
+                  f.attrs = (0o100644 << 16) | 0x20;
                   f.mtime = new Date();
                   zip.add(f);
                   
@@ -92,7 +92,7 @@ serve(async (req) => {
               } else if (file.content !== undefined) {
                 const f = new ZipDeflate(file.name, { level: 1 });
                 f.os = 3;
-                f.attrs = (0o100644 << 16) | 0o0;
+                f.attrs = (0o100644 << 16) | 0x20;
                 f.mtime = new Date();
                 zip.add(f);
                 f.push(new TextEncoder().encode(file.content), true);
