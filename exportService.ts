@@ -235,7 +235,7 @@ export const generateCloudExportPayload = (
         const folderPath = getPath(item);
         const url = getPublicUrl(item.s3Key, false);
 
-        exportFiles.push({ name: folderPath + finalName, url });
+        exportFiles.push({ name: folderPath + finalName, url, size: item.size });
     }
 
     return exportFiles;
