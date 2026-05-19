@@ -121,6 +121,13 @@ export const handler = async (event) => {
 
         // Process files
         for (const file of files) {
+            if (!file.s3Key) {
+                if (file.name && file.name.endsWith('/')) {
+                    archive.append('', { name: file.name });
+                }
+                continue;
+            }
+
             console.log(`Processing file: ${file.finalName}`);
             
             const getObjCmd = new GetObjectCommand({ Bucket: BUCKET, Key: file.s3Key });
