@@ -261,7 +261,7 @@ export const generateChunkedZips = async (
                                     if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), msg);
                                 });
                                 if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-                                inputData = response;
+                                inputData = response.body;
                             } else {
                                 throw new Error(`Data missing for ${item.name}`);
                             }
@@ -454,7 +454,7 @@ export const generateStreamingZip = async (
                             if (onProgress) onProgress(Math.round((filesAdded / files.length) * 100), `Downloading: ${item.name}`);
                             const response = await fetchDirectS3Response(item.s3Key);
                             if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-                            inputData = response;
+                            inputData = response.body;
                         }
                     }
 
