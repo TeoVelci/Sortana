@@ -11,11 +11,16 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.1049.0",
     "@aws-sdk/client-lambda": "^3.1049.0",
-    "@aws-sdk/client-s3": "^3.1048.0",
-    "@aws-sdk/lib-storage": "^3.1048.0",
+    "@aws-sdk/client-s3": "^3.1049.0",
+    "@aws-sdk/lib-storage": "^3.1049.0",
+    "@img/sharp-libvips-linux-x64": "^1.2.4",
     "archiver": "^7.0.1",
     "dotenv": "^17.4.2",
-    "sharp": "^0.33.2"
+    "sharp": "^0.32.6"
+  },
+  "optionalDependencies": {
+    "@img/sharp-linux-x64": "^0.33.5"
   }
 }
