@@ -287,7 +287,8 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
 
               if (error) {
                   console.error("Export Error:", error);
-                  showToast("Failed to start export", "error");
+                  const errorMessage = error.message || error.toString() || "Unknown error";
+                  showToast(`Failed to start export: ${errorMessage}`, "error");
               } else {
                   showToast("Export started in background. You will be notified when ready.", "success");
               }
