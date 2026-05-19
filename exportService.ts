@@ -202,6 +202,8 @@ export const generateCloudExportPayload = (
     };
 
     const exportFiles = [];
+    const addedFolders = new Set<string>();
+    
     for (let index = 0; index < files.length; index++) {
         const item = files[index];
         if (!item.s3Key) continue;
@@ -233,6 +235,19 @@ export const generateCloudExportPayload = (
         }
 
         const folderPath = getPath(item);
+        
+        if (folderPath) {
+            const parts = folderPath.split('/').filter(Boolean);
+            let currentPath = '';
+            for (const part of parts) {
+                currentPath += part + '/';
+                if (!addedFolders.has(currentPath)) {
+                    addedFolders.add(currentPath);
+                    exportFiles.push({ name: currentPath });
+                }
+            }
+        }
+
         const url = getPublicUrl(item.s3Key, false);
 
         exportFiles.push({ name: folderPath + finalName, url, size: item.size });
