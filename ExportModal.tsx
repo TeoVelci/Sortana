@@ -5,6 +5,7 @@ import { useTour } from './TourContext';
 import { generateStreamingZip, calculateExportChunks, generateCloudExportPayload, ExportChunk, ExportOptions } from './exportService';
 import { useToast } from './ToastContext';
 import { getPublicUrl } from './storageService';
+import { supabase } from './supabaseClient';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -272,28 +273,25 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, selectedItem
                   }
               }
 
-              // Cloud-Streaming ZIP Pipeline (No local processing needed)
-              setStatusText("Starting cloud export...");
+              // AWS Background Worker Pipeline
+              setStatusText("Starting background export...");
               const exportFiles = generateCloudExportPayload(files, items, options);
               
-              const form = document.createElement('form');
-              form.method = 'POST';
-              form.action = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-zip`;
-              
-              const input = document.createElement('input');
-              input.type = 'hidden';
-              input.name = 'payload';
-              input.value = JSON.stringify({ 
-                  files: exportFiles, 
-                  zipName: `Sortana_Export_${Date.now()}.zip` 
+              const { data, error } = await supabase.functions.invoke('export-zip', {
+                  body: { 
+                      files: exportFiles, 
+                      options: options,
+                      zipName: `Sortana_Export_${Date.now()}.zip` 
+                  }
               });
+
+              if (error) {
+                  console.error("Export Error:", error);
+                  showToast("Failed to start export", "error");
+              } else {
+                  showToast("Export started in background. You will be notified when ready.", "success");
+              }
               
-              form.appendChild(input);
-              document.body.appendChild(form);
-              form.submit();
-              document.body.removeChild(form);
-              
-              showToast("Download started", "success");
               onClose();
               return;
           }

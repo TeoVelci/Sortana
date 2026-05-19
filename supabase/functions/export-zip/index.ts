@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { Zip, ZipPassThrough } from "https://cdn.skypack.dev/fflate?min"
+import { LambdaClient, InvokeCommand } from "npm:@aws-sdk/client-lambda@3.1048.0"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -13,7 +15,6 @@ serve(async (req) => {
   try {
     let payloadStr: string | null = null;
     
-    // Support both application/json and form-data/urlencoded
     const contentType = req.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
         const body = await req.json();
@@ -27,91 +28,68 @@ serve(async (req) => {
       throw new Error("Empty payload");
     }
 
-    const { files, zipName } = JSON.parse(payloadStr);
+    const { files, zipName, options, userId } = JSON.parse(payloadStr);
 
     if (!files || !Array.isArray(files)) {
       throw new Error("Missing or invalid files array");
     }
 
-    const stream = new ReadableStream({
-      start(controller) {
-        const zip = new Zip();
-        
-        zip.ondata = (err, data, final) => {
-          if (err) {
-            controller.error(err);
-          } else {
-            controller.enqueue(data);
-            if (final) {
-              controller.close();
-            }
-          }
-        };
-
-        // Background worker to process files
-        (async () => {
-          try {
-            for (const file of files) {
-              if (file.name.endsWith('/')) {
-                // Folder entry (using Unix os:3 to embed Unix permissions and MS-DOS attrs in upper bytes)
-                const f = new ZipPassThrough(file.name);
-                f.os = 3;
-                f.attrs = (0o40755 << 16) | 0x10;
-                f.mtime = new Date();
-                zip.add(f);
-                f.push(new Uint8Array(0), true);
-              } else if (file.url) {
-                const response = await fetch(file.url);
-                if (response.ok && response.body) {
-                  // Must use level > 0 (Deflate) and os:3 to explicitly declare as Unix with DOS fallback
-                  // Must use os:3 to explicitly declare as Unix with DOS fallback
-                  const f = new ZipPassThrough(file.name);
-                  f.os = 3;
-                  f.attrs = (0o100644 << 16) | 0x20;
-                  f.mtime = new Date();
-                  zip.add(f);
-                  
-                  const reader = response.body.getReader();
-                  while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) {
-                      f.push(new Uint8Array(0), true);
-                      break;
-                    }
-                    if (value) {
-                      f.push(value, false);
-                    }
-                    
-                    // Simple backpressure: wait if the stream queue is full
-                    while (controller.desiredSize !== null && controller.desiredSize <= 0) {
-                      await new Promise(resolve => setTimeout(resolve, 10));
-                    }
-                  }
-                } else {
-                  console.error(`Failed to fetch ${file.url}: ${response.status}`);
-                }
-              } else if (file.content !== undefined) {
-                const f = new ZipPassThrough(file.name);
-                f.os = 3;
-                f.attrs = (0o100644 << 16) | 0x20;
-                f.mtime = new Date();
-                zip.add(f);
-                f.push(new TextEncoder().encode(file.content), true);
-              }
-            }
-            zip.end();
-          } catch (err) {
-            controller.error(err);
-          }
-        })();
-      }
+    // Initialize Supabase Client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: req.headers.get('Authorization')! } }
     });
-    
-    const headers = new Headers(corsHeaders);
-    headers.set('Content-Type', 'application/zip');
-    headers.set('Content-Disposition', `attachment; filename="${zipName || 'Sortana_Export.zip'}"`);
 
-    return new Response(stream, { headers });
+    // We can use the passed userId or get it securely from auth
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const finalUserId = user?.id || userId;
+
+    if (!finalUserId) {
+        throw new Error("User not authenticated");
+    }
+
+    // Insert job into export_jobs table
+    const { data: job, error: insertError } = await supabase
+        .from('export_jobs')
+        .insert({
+            user_id: finalUserId,
+            status: 'pending',
+            total_files: files.length
+        })
+        .select()
+        .single();
+
+    if (insertError) {
+        throw new Error(`Failed to create export job: ${insertError.message}`);
+    }
+
+    // Trigger AWS Lambda asynchronously
+    const lambdaClient = new LambdaClient({
+        region: Deno.env.get('AWS_REGION') || 'us-east-2',
+        credentials: {
+            accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') || '',
+            secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') || ''
+        }
+    });
+
+    const invokeCmd = new InvokeCommand({
+        FunctionName: 'sortana-export-zipper',
+        InvocationType: 'Event', // Asynchronous execution
+        Payload: new TextEncoder().encode(JSON.stringify({
+            exportId: job.id,
+            files: files,
+            options: options || {},
+            zipName: zipName || 'Sortana_Export.zip'
+        }))
+    });
+
+    await lambdaClient.send(invokeCmd);
+
+    return new Response(JSON.stringify({ message: "Export job started", exportId: job.id }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+    });
 
   } catch (error) {
     console.error(error);

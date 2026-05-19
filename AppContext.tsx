@@ -273,6 +273,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Note: We don't persist auth state manually anymore as Supabase handles it
   // Note: User and Items are now persisted in Supabase
   useEffect(() => localStorage.setItem('sortana_storage', JSON.stringify(storage)), [storage]);
+
+  // --- Realtime Export Listener ---
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    
+    const channel = supabase.channel('public:export_jobs')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'export_jobs',
+          filter: `user_id=eq.${session.user.id}`
+        },
+        (payload) => {
+          if (payload.new.status === 'completed' && payload.new.s3_key) {
+            getPresignedUrl(payload.new.s3_key).then(url => {
+               if (url) {
+                   showToast("Export completed! Downloading...", "success");
+                   const a = document.createElement('a');
+                   a.href = url;
+                   a.download = 'Sortana_Export.zip';
+                   document.body.appendChild(a);
+                   a.click();
+                   document.body.removeChild(a);
+               } else {
+                   showToast("Export completed, but failed to get download URL.", "error");
+               }
+            });
+          } else if (payload.new.status === 'failed') {
+            showToast("Export failed to complete.", "error");
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
+
   useEffect(() => localStorage.setItem('sortana_activity', JSON.stringify(recentActivity)), [recentActivity]);
 
   // --- GHOST DATA CLEARER ---
