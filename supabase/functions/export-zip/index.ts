@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { Zip, ZipDeflate } from "https://cdn.skypack.dev/fflate?min"
+import { Zip, ZipPassThrough } from "https://cdn.skypack.dev/fflate?min"
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -54,7 +54,7 @@ serve(async (req) => {
             for (const file of files) {
               if (file.name.endsWith('/')) {
                 // Folder entry (using Unix os:3 to embed Unix permissions and MS-DOS attrs in upper bytes)
-                const f = new ZipDeflate(file.name, { level: 1 });
+                const f = new ZipPassThrough(file.name);
                 f.os = 3;
                 f.attrs = (0o40755 << 16) | 0x10;
                 f.mtime = new Date();
@@ -64,7 +64,8 @@ serve(async (req) => {
                 const response = await fetch(file.url);
                 if (response.ok && response.body) {
                   // Must use level > 0 (Deflate) and os:3 to explicitly declare as Unix with DOS fallback
-                  const f = new ZipDeflate(file.name, { level: 1 });
+                  // Must use os:3 to explicitly declare as Unix with DOS fallback
+                  const f = new ZipPassThrough(file.name);
                   f.os = 3;
                   f.attrs = (0o100644 << 16) | 0x20;
                   f.mtime = new Date();
@@ -90,7 +91,7 @@ serve(async (req) => {
                   console.error(`Failed to fetch ${file.url}: ${response.status}`);
                 }
               } else if (file.content !== undefined) {
-                const f = new ZipDeflate(file.name, { level: 1 });
+                const f = new ZipPassThrough(file.name);
                 f.os = 3;
                 f.attrs = (0o100644 << 16) | 0x20;
                 f.mtime = new Date();
