@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 
 // --- Types ---
 
-export type TourId = 'dashboard' | 'browse' | 'account' | 'export' | 'magic_editor_mobile' | 'magic_editor_desktop';
+export type TourId = 'dashboard' | 'dashboard_mobile' | 'browse' | 'account' | 'export' | 'magic_editor_mobile' | 'magic_editor_desktop';
 
 export interface TourStep {
   targetId: string;
@@ -54,6 +54,28 @@ const TOURS: Record<TourId, TourStep[]> = {
       targetId: 'copilot-trigger',
       title: 'Sortana Copilot',
       content: 'Your AI Assistant is always here. Drag an image onto this button to ask questions about it.',
+    }
+  ],
+  dashboard_mobile: [
+    {
+      targetId: 'upload-zone',
+      title: 'Mobile Uploads',
+      content: 'Tap here to select files from your Photo Library or device storage. We recommend choosing files directly from storage for massive 4K/HDR videos.',
+    },
+    {
+      targetId: 'smart-sort-toggle',
+      title: 'Smart Ingest',
+      content: 'Leave this ON to let our AI sort your mobile uploads into neat folders based on Date and Camera Model.',
+    },
+    {
+      targetId: 'auto-organize-card',
+      title: 'Auto-Organizer',
+      content: 'Have a messy library? Use this AI tool to restructure your existing cloud files instantly.',
+    },
+    {
+      targetId: 'storage-card',
+      title: 'Storage Monitor',
+      content: 'Keep an eye on your cloud usage from your phone here.',
     }
   ],
   browse: [
@@ -247,8 +269,14 @@ export const TourProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
          const status = getTourStatus();
          const path = location.pathname;
 
-         if (path === '/dashboard' && !status.dashboard) {
-             setIsWelcomeOpen(true);
+         const isMobile = window.innerWidth < 768;
+
+         if (path === '/dashboard') {
+             if (isMobile && !status.dashboard_mobile) {
+                 startTour('dashboard_mobile');
+             } else if (!isMobile && !status.dashboard) {
+                 setIsWelcomeOpen(true);
+             }
          } else if (path === '/browse' && !status.browse) {
              startTour('browse');
          } else if (path === '/account' && !status.account) {

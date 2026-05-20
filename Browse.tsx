@@ -142,8 +142,8 @@ const ItemCell: React.FC<{ item: FileSystemItem, data: any }> = ({ item, data })
             {/* Square Box */}
             <div className={`w-full aspect-square bg-gray-100 dark:bg-dark-900 rounded-2xl flex items-center justify-center p-1 mb-3 border transition-all relative overflow-hidden shrink-0 z-10 ${isSelected ? 'border-primary ring-2 ring-primary/50' : 'border-transparent dark:border-white/10 hover:border-primary/50'}`}>
             
-            {/* Selection Checkmark */}
-            <div className={`absolute top-2 left-2 z-30 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+            {/* Selection Checkmark - Increased Tap Target */}
+            <div className={`absolute -top-1 -left-1 z-30 transition-opacity duration-200 w-12 h-12 flex items-center justify-center cursor-pointer ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                 <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : 'bg-black/30 border-white hover:bg-black/50'}`}>
                     {isSelected && <i className="fa-solid fa-check text-white text-xs"></i>}
                 </div>
@@ -395,6 +395,10 @@ const Browse: React.FC = () => {
   const [isCulling, setIsCulling] = useState(false);
   const [cullingIndex, setCullingIndex] = useState(0);
   const [cullingContextItems, setCullingContextItems] = useState<FileSystemItem[] | null>(null);
+
+  // Touch Gesture State for Culling Modal
+  const [touchStart, setTouchStart] = useState<{ x: number, y: number } | null>(null);
+  const [touchEnd, setTouchEnd] = useState<{ x: number, y: number } | null>(null);
 
   // --- NEW: Comparison State ---
   const [isComparing, setIsComparing] = useState(false);
@@ -831,6 +835,36 @@ const Browse: React.FC = () => {
       }
     }
   }, [activeCullingItem, activeCullingList.length, updateItemMetadata, showToast]);
+
+  const onTouchStartCulling = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
+  };
+
+  const onTouchMoveCulling = (e: React.TouchEvent) => {
+    setTouchEnd({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
+  };
+
+  const onTouchEndCulling = () => {
+    if (!touchStart || !touchEnd) return;
+    const distanceX = touchStart.x - touchEnd.x;
+    const distanceY = touchStart.y - touchEnd.y;
+    const minSwipeDistance = 50;
+    
+    const isLeftSwipe = distanceX > minSwipeDistance;
+    const isRightSwipe = distanceX < -minSwipeDistance;
+    const isDownSwipe = distanceY < -minSwipeDistance; // y goes down
+
+    if (Math.abs(distanceX) > Math.abs(distanceY)) {
+        if (isLeftSwipe) handleCullingAction('next');
+        if (isRightSwipe) handleCullingAction('prev');
+    } else {
+        if (isDownSwipe) {
+            setIsCulling(false);
+            setCullingContextItems(null);
+        }
+    }
+  };
 
   useEffect(() => {
     if (!isCulling) return;
@@ -1416,7 +1450,12 @@ const Browse: React.FC = () => {
 
       {/* --- CULLING MODE MODAL --- */}
       {isCulling && activeCullingItem && (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col animate-in fade-in duration-200">
+        <div 
+           className="fixed inset-0 z-[100] bg-black flex flex-col animate-in fade-in duration-200"
+           onTouchStart={onTouchStartCulling}
+           onTouchMove={onTouchMoveCulling}
+           onTouchEnd={onTouchEndCulling}
+        >
              
              {/* Header - CHANGED: Relative position, dark background, shrink-0 */}
              <div className="w-full p-4 flex justify-between items-center bg-dark-900 border-b border-white/10 z-20 shrink-0 text-white">

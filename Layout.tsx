@@ -199,8 +199,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             
             {isExportsOpen && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setIsExportsOpen(false)}></div>
-                <div className="absolute -right-16 sm:right-0 top-full mt-2 w-[300px] sm:w-72 bg-white dark:bg-surface-dark border border-gray-200 dark:border-white/10 rounded-lg shadow-xl z-50 overflow-hidden flex flex-col max-h-96">
+                <div className="fixed inset-0 z-40 bg-black/20 sm:bg-transparent transition-opacity" onClick={() => setIsExportsOpen(false)}></div>
+                <div className="fixed sm:absolute bottom-0 sm:bottom-auto left-0 sm:left-auto right-0 sm:right-0 sm:top-full sm:mt-2 w-full sm:w-72 bg-white dark:bg-surface-dark border-t sm:border border-gray-200 dark:border-white/10 rounded-t-2xl sm:rounded-lg shadow-2xl z-50 overflow-hidden flex flex-col max-h-[80vh] sm:max-h-96 pb-6 sm:pb-0 transition-transform duration-300 translate-y-0 sm:translate-y-0 slide-up-animation">
                   <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5 flex justify-between items-center">
                     <h3 className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Recent Exports</h3>
                     <button onClick={() => setIsExportsOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
