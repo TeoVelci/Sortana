@@ -1,5 +1,13 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
-import { S3Client, PutObjectCommand, GetObjectCommand } from "npm:@aws-sdk/client-s3"
+import { 
+  S3Client, 
+  PutObjectCommand, 
+  GetObjectCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand
+} from "npm:@aws-sdk/client-s3"
 import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3"
 
@@ -25,7 +33,6 @@ serve(async (req) => {
     const bucketName = Deno.env.get('AWS_BUCKET_NAME');
     if (!bucketName) throw new Error("Missing AWS_BUCKET_NAME in environment secrets");
 
-    // Handle GET request for viewing/downloading files
     if (req.method === 'GET') {
       const url = new URL(req.url);
       const key = url.searchParams.get('key');
@@ -47,35 +54,23 @@ serve(async (req) => {
       }
 
       const command = new GetObjectCommand(commandParams);
-
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-      
       const shouldRedirect = url.searchParams.get('redirect') !== 'false';
 
       if (shouldRedirect) {
-        // Redirect directly to the presigned URL so it can be used in <img> tags
         return new Response(null, {
           status: 302,
-          headers: {
-            ...corsHeaders,
-            'Location': signedUrl
-          }
+          headers: { ...corsHeaders, 'Location': signedUrl }
         });
       } else {
-        // Return JSON with the presigned URL
         return new Response(JSON.stringify({ url: signedUrl }), {
           status: 200,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
     }
 
-    // Handle POST request for generating upload URLs
     if (req.method === 'POST') {
-      // Manually verify JWT since we will deploy with verify_jwt: false
       const authHeader = req.headers.get('Authorization')
       if (!authHeader) {
         return new Response(JSON.stringify({ error: 'Unauthorized: Missing Authorization header' }), { status: 401, headers: corsHeaders })
@@ -91,8 +86,57 @@ serve(async (req) => {
          return new Response(JSON.stringify({ error: 'Unauthorized: Invalid token' }), { status: 401, headers: corsHeaders })
       }
 
-      const { filename, filetype } = await req.json()
+      const body = await req.json()
+      const { action, filename, filetype, uploadId, partNumber, parts, key: reqKey } = body;
       
+      // Multipart: Create
+      if (action === 'createMultipart') {
+        const key = `uploads/${Date.now()}-${filename}`;
+        const command = new CreateMultipartUploadCommand({
+          Bucket: bucketName,
+          Key: key,
+          ContentType: filetype,
+        });
+        const response = await s3Client.send(command);
+        return new Response(JSON.stringify({ uploadId: response.UploadId, key }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Multipart: Sign Part
+      if (action === 'signPart') {
+        const command = new UploadPartCommand({
+          Bucket: bucketName,
+          Key: reqKey,
+          UploadId: uploadId,
+          PartNumber: partNumber,
+        });
+        const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+        return new Response(JSON.stringify({ url: uploadUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Multipart: Complete
+      if (action === 'completeMultipart') {
+        const command = new CompleteMultipartUploadCommand({
+          Bucket: bucketName,
+          Key: reqKey,
+          UploadId: uploadId,
+          MultipartUpload: { Parts: parts },
+        });
+        await s3Client.send(command);
+        return new Response(JSON.stringify({ success: true, key: reqKey }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Multipart: Abort
+      if (action === 'abortMultipart') {
+        const command = new AbortMultipartUploadCommand({
+          Bucket: bucketName,
+          Key: reqKey,
+          UploadId: uploadId,
+        });
+        await s3Client.send(command);
+        return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Default: Single part presigned URL
       if (!filename || !filetype) {
         return new Response(JSON.stringify({ error: 'Filename and filetype are required' }), {
           status: 400,
@@ -101,20 +145,14 @@ serve(async (req) => {
       }
 
       const key = `uploads/${Date.now()}-${filename}`;
-      
       const command = new PutObjectCommand({
         Bucket: bucketName,
         Key: key,
         ContentType: filetype,
       });
 
-      // Generate the presigned URL for upload
       const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-      
-      return new Response(
-        JSON.stringify({ url: uploadUrl, key }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      )
+      return new Response(JSON.stringify({ url: uploadUrl, key }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     return new Response("Method not allowed", { status: 405, headers: corsHeaders });

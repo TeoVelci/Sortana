@@ -1,0 +1,7 @@
+{
+  "zipName": "test.zip",
+  "files": [
+    { "name": "test.txt", "content": "Hello World!" },
+    { "name": "folder/" }
+  ]
+}

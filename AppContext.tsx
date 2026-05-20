@@ -4,7 +4,7 @@ import { generateTagsForBatch, FolderPlan, analyzeVideo, VideoAnalysisResult, Qu
 import { saveFileToDB, getFileFromDB, deleteFileFromDB } from './dbService';
 import { useAuth } from './AuthContext';
 import { supabase } from './supabaseClient';
-import { getPresignedUrl, uploadFileToS3, downloadFileFromS3, getPublicUrl } from './storageService';
+import { getPresignedUrl, uploadFileToS3, downloadFileFromS3, getPublicUrl, multipartUploadFileToS3 } from './storageService';
 import { fetchItems, upsertItem, deleteItemFromDB as deleteItemFromSupabase, fetchUserProfile } from './supabaseService';
 import { useToast } from './ToastContext';
 
@@ -1259,8 +1259,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Define the upload task for this file
       uploadTasks.push(async () => {
           try {
-              const { url, key } = await getPresignedUrl(f.name, f.type);
-              await uploadFileToS3(f, url);
+              let key: string;
+              if (f.size > 15 * 1024 * 1024) {
+                  const result = await multipartUploadFileToS3(f, f.name);
+                  key = result.key;
+              } else {
+                  const presign = await getPresignedUrl(f.name, f.type);
+                  key = presign.key;
+                  await uploadFileToS3(f, presign.url);
+              }
               
               let finalPreviewUrl = previewUrl;
               let finalThumbnailUrl = thumbnailUrl;
@@ -1622,8 +1629,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       try {
           // Re-attempt S3 upload
-          const { url, key } = await getPresignedUrl(file.name, file.type);
-          await uploadFileToS3(file, url);
+          let key: string;
+          if (file.size > 15 * 1024 * 1024) {
+              const result = await multipartUploadFileToS3(file, file.name);
+              key = result.key;
+          } else {
+              const presign = await getPresignedUrl(file.name, file.type);
+              key = presign.key;
+              await uploadFileToS3(file, presign.url);
+          }
           
           const finalUpdates: Partial<FileSystemItem> = {
               s3Key: key,

@@ -28,6 +28,11 @@ export const uploadFileToS3 = async (file: File | Blob, url: string, retries = 3
 
   // Standard S3 PUT upload
   for (let i = 0; i < retries; i++) {
+    // Pause if offline
+    while (!navigator.onLine) {
+       await new Promise(resolve => window.addEventListener('online', resolve, { once: true }));
+    }
+
     try {
       const response = await fetch(url, {
         method: 'PUT',
@@ -94,4 +99,110 @@ export const saveFileMetadata = async (
 ) => {
   console.log('Saving metadata for', key, metadata);
   // Metadata is handled via upsertItem in AppContext
+};
+
+/**
+ * Uploads a large file using S3 Multipart Upload.
+ * Chops file into 5MB chunks and uploads concurrently, with offline resilience.
+ */
+export const multipartUploadFileToS3 = async (
+  file: File, 
+  filename: string,
+  onProgress?: (percent: number) => void
+): Promise<UploadResult> => {
+  const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+  const totalParts = Math.ceil(file.size / CHUNK_SIZE);
+  
+  // 1. Create Multipart Upload
+  const { data: createData, error: createError } = await supabase.functions.invoke('get-aws-presigned-url', {
+    body: { action: 'createMultipart', filename, filetype: file.type || 'application/octet-stream' }
+  });
+  if (createError) throw createError;
+  const { uploadId, key } = createData;
+
+  const uploadedParts: { ETag: string, PartNumber: number }[] = [];
+  
+  try {
+    // 2. Upload chunk function
+    const uploadChunk = async (partNumber: number, chunk: Blob) => {
+      const { data: signData, error: signError } = await supabase.functions.invoke('get-aws-presigned-url', {
+        body: { action: 'signPart', uploadId, partNumber, key }
+      });
+      if (signError) throw signError;
+      
+      let retries = 5;
+      while (retries > 0) {
+        // Pause if offline
+        while (!navigator.onLine) {
+           await new Promise(resolve => window.addEventListener('online', resolve, { once: true }));
+        }
+
+        try {
+          const res = await fetch(signData.url, {
+            method: 'PUT',
+            body: chunk,
+          });
+          
+          if (!res.ok) throw new Error(`Upload part ${partNumber} failed: ${res.status}`);
+          
+          const etag = res.headers.get('ETag') || res.headers.get('etag');
+          if (!etag) throw new Error("No ETag returned for part");
+          
+          return { ETag: etag.replace(/"/g, ''), PartNumber: partNumber };
+        } catch (err) {
+          retries--;
+          if (retries === 0) throw err;
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+    };
+
+    // We can use a simple concurrency limiter
+    let activeUploads = 0;
+    const maxConcurrent = 3;
+    let partsCompleted = 0;
+    const promises: Promise<any>[] = [];
+
+    for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+      while (activeUploads >= maxConcurrent) {
+        await new Promise(resolve => setTimeout(resolve, 100)); // wait
+      }
+      
+      const start = (partNumber - 1) * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = file.slice(start, end);
+      
+      activeUploads++;
+      const promise = uploadChunk(partNumber, chunk).then((res) => {
+        if (res) uploadedParts.push(res);
+        activeUploads--;
+        partsCompleted++;
+        if (onProgress) onProgress(Math.round((partsCompleted / totalParts) * 100));
+      }).catch(err => {
+        activeUploads--;
+        throw err;
+      });
+      promises.push(promise);
+    }
+    
+    await Promise.all(promises);
+    
+    uploadedParts.sort((a, b) => a.PartNumber - b.PartNumber);
+
+    // 3. Complete Multipart
+    const { data: completeData, error: completeError } = await supabase.functions.invoke('get-aws-presigned-url', {
+      body: { action: 'completeMultipart', uploadId, parts: uploadedParts, key }
+    });
+    if (completeError) throw completeError;
+
+    return { url: '', key };
+
+  } catch (err) {
+    // 4. Abort on fatal error
+    await supabase.functions.invoke('get-aws-presigned-url', {
+      body: { action: 'abortMultipart', uploadId, key }
+    }).catch(console.error); 
+    
+    throw err;
+  }
 };
