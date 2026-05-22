@@ -461,10 +461,7 @@ const Browse: React.FC = () => {
               return null; 
           }
       }
-          // No need to show snippet for name match usually, but we can if we want consistency
-          return null; 
-      }
-
+      
       return null;
   }, []);
 
