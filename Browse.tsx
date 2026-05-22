@@ -350,7 +350,7 @@ const Browse: React.FC = () => {
   } = useApp();
   
   const { showToast } = useToast();
-  const { activeTourId } = useTour();
+  const { activeTourId, activeStep } = useTour();
   
   // Navigation State Logic (Dynamic Breadcrumbs)
   const breadcrumbs = React.useMemo(() => {
@@ -1335,10 +1335,10 @@ const Browse: React.FC = () => {
       </div>
 
       {/* --- Floating Bottom Bar --- */}
-      {!isInspectorOpen && selectedIds.size > 0 && (
-          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white dark:bg-surface-dark border border-gray-200 dark:border-white/10 shadow-2xl rounded-2xl p-2 z-40 flex items-center gap-2 animate-in slide-in-from-bottom-5 duration-300 max-w-[90vw] overflow-x-auto">
+      {!isInspectorOpen && (selectedIds.size > 0 || (activeTourId === 'browse' && activeStep?.targetId === 'browse-action-bar')) && (
+          <div id="browse-action-bar" className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white dark:bg-surface-dark border border-gray-200 dark:border-white/10 shadow-2xl rounded-2xl p-2 z-40 flex items-center gap-2 animate-in slide-in-from-bottom-5 duration-300 max-w-[90vw] overflow-x-auto">
               <div className="px-4 text-sm font-bold text-gray-900 dark:text-white border-r border-gray-200 dark:border-white/10 pr-4 mr-1 whitespace-nowrap">
-                  {selectedIds.size} Selected
+                  {selectedIds.size || 1} Selected
               </div>
               
               {/* NEW: Compare Button (Visible only if 2+ items selected) */}

@@ -100,6 +100,11 @@ const TOURS: Record<TourId, TourStep[]> = {
       content: 'Double-click any item to preview it. Drag to select multiple items for bulk actions.',
     },
     {
+      targetId: 'browse-action-bar',
+      title: 'Bulk Actions Menu',
+      content: 'When you select files, this menu appears. Use it to mass-delete, apply star ratings, add text tags, or compare images side-by-side!',
+    },
+    {
       targetId: 'browse-stacking',
       title: 'Burst Stacking',
       content: 'Reduce clutter. Toggle this to automatically group similar "burst" shots into a single stack.',
