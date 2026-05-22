@@ -1680,14 +1680,14 @@ const Browse: React.FC = () => {
                         autoPlay
                         loop
                         muted
-                        className="max-w-full max-h-full object-contain shadow-2xl z-10"
+                        className="w-full h-full max-h-full object-contain shadow-2xl z-10"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                 ) : (
                     <img 
                         src={activeCullingItem.previewUrl || activeCullingItem.thumbnailUrl || getPublicUrl(activeCullingItem.s3Key!)}
                         alt={activeCullingItem.name} 
-                        className="max-w-full max-h-full object-contain shadow-2xl z-10"
+                        className="w-full h-full max-h-full object-contain shadow-2xl z-10"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                 )}
