@@ -344,6 +344,7 @@ const Browse: React.FC = () => {
       moveItems,
       duplicateItems,
       groupItems,
+      unstackItems,
       formatSize,
       user,
       currentFolderId,
@@ -541,6 +542,12 @@ const Browse: React.FC = () => {
   // Derived Selection
   const selectedItems = items.filter(i => selectedIds.has(i.id));
   const activeItem = selectedItems.length === 1 ? selectedItems[0] : null;
+
+  // Stacks that are selected (for unstacking)
+  const selectedGroups = selectedItems
+      .filter(i => i.groupId && i.isStackTop)
+      .map(i => i.groupId as string);
+  const canUnstack = selectedGroups.length > 0;
 
   // --- Handlers: Navigation & Selection ---
 
@@ -1382,26 +1389,42 @@ const Browse: React.FC = () => {
                   {selectedIds.size || 1} Selected
               </div>
               
-              {/* NEW: Compare & Stack Buttons (Visible only if 2+ items selected) */}
-              {selectedIds.size > 1 && (
+              {/* NEW: Compare & Stack/Unstack Buttons (Visible only if 2+ items selected or can unstack) */}
+              {(selectedIds.size > 1 || canUnstack) && (
                   <>
-                    <button 
-                        onClick={() => {
-                            groupItems(Array.from(selectedIds));
-                            setSelectedIds(new Set());
-                        }}
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-xl transition-colors whitespace-nowrap"
-                    >
-                        <span className="material-icons-outlined text-lg">layers</span>
-                        Stack
-                    </button>
-                    <button 
-                        onClick={handleStartComparison}
-                        className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-50 dark:bg-primary/20 text-primary border border-primary/30 hover:bg-primary hover:text-white rounded-xl transition-colors whitespace-nowrap"
-                    >
-                        <i className="fa-solid fa-code-compare transform rotate-90"></i>
-                        Compare
-                    </button>
+                    {canUnstack && (
+                        <button 
+                            onClick={() => {
+                                unstackItems(selectedGroups);
+                                setSelectedIds(new Set());
+                            }}
+                            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-xl transition-colors whitespace-nowrap"
+                        >
+                            <span className="material-icons-outlined text-lg">layers_clear</span>
+                            Unstack
+                        </button>
+                    )}
+                    {selectedIds.size > 1 && !canUnstack && (
+                        <button 
+                            onClick={() => {
+                                groupItems(Array.from(selectedIds));
+                                setSelectedIds(new Set());
+                            }}
+                            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-xl transition-colors whitespace-nowrap"
+                        >
+                            <span className="material-icons-outlined text-lg">layers</span>
+                            Stack
+                        </button>
+                    )}
+                    {selectedIds.size > 1 && (
+                        <button 
+                            onClick={handleStartComparison}
+                            className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-50 dark:bg-primary/20 text-primary border border-primary/30 hover:bg-primary hover:text-white rounded-xl transition-colors whitespace-nowrap"
+                        >
+                            <i className="fa-solid fa-code-compare transform rotate-90"></i>
+                            Compare
+                        </button>
+                    )}
                     <div className="w-px h-6 bg-gray-200 dark:bg-white/10"></div>
                   </>
               )}

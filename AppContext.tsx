@@ -125,6 +125,7 @@ interface AppContextType {
   moveItems: (ids: string[], targetFolderId: string | null) => void;
   duplicateItems: (ids: string[], targetFolderId: string | null) => void;
   groupItems: (ids: string[]) => void;
+  unstackItems: (groupIds: string[]) => void;
   updateItemMetadata: (id: string, updates: Partial<FileSystemItem>) => void;
   executeOrganizationPlan: (plan: FolderPlan[], targetParentId?: string | null) => void;
   analyzeVideoItem: (id: string, fileInfo?: { name: string, type: string }, rawMetadata?: string) => Promise<void>;
@@ -1639,6 +1640,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       showToast(`Stacked ${ids.length} items together`, 'success');
   };
 
+  const unstackItems = (groupIds: string[]) => {
+      if (groupIds.length === 0) return;
+      const targetGroups = new Set(groupIds);
+      
+      setItems(prev => prev.map(i => {
+          if (i.groupId && targetGroups.has(i.groupId)) {
+              const updated = { ...i, groupId: undefined, isStackTop: false };
+              upsertItem(updated);
+              return updated;
+          }
+          return i;
+      }));
+      showToast(`Unstacked ${groupIds.length} group(s)`, 'success');
+  };
+
   const bulkUpdateMetadata = (ids: string[], updates: Partial<FileSystemItem>) => {
       const targetIds = new Set(ids);
       const originalItems = items.filter(i => targetIds.has(i.id));
@@ -1833,6 +1849,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       moveItems,
       duplicateItems,
       groupItems,
+      unstackItems,
       updateItemMetadata,
       executeOrganizationPlan,
       analyzeVideoItem,
