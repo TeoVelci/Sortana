@@ -1391,7 +1391,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     for (let i = 0; i < newItems.length; i++) {
         const current = newItems[i];
-        if (current.type !== 'file' || current.fileType !== 'image') continue;
+        if (current.type !== 'file' || (current.fileType !== 'image' && current.fileType !== 'raw')) continue;
 
         const burstIds = [current.id];
         let j = i + 1;
@@ -1399,7 +1399,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const next = newItems[j];
             const prevInBurst = newItems[j - 1]; // Compare to the immediately preceding frame, not the first frame!
             
-            if (next.type === 'file' && next.fileType === 'image' && 
+            if (next.type === 'file' && (next.fileType === 'image' || next.fileType === 'raw') && 
                 next.parentId === current.parentId && 
                 Math.abs((next.dateTaken || 0) - (prevInBurst.dateTaken || 0)) < BURST_THRESHOLD) {
                 
