@@ -269,7 +269,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Sync Auth State & Fetch Data
   useEffect(() => {
-    setIsAuthenticated(!!session);
+    setIsAuthenticated(!!session?.user?.id);
     if (session?.user?.email) {
         // Fetch Profile from Supabase
         fetchUserProfile().then(profile => {
@@ -298,7 +298,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }
                 return item;
             });
-            setItems(cleanedItems);
+            
+            // Merge with existing items to preserve transient blobs and active uploads
+            setItems(prevItems => {
+                if (prevItems.length === 0) return cleanedItems;
+                return cleanedItems.map(cleaned => {
+                    const existing = prevItems.find(p => p.id === cleaned.id);
+                    if (existing) {
+                        return {
+                            ...cleaned,
+                            previewUrl: existing.previewUrl || cleaned.previewUrl,
+                            thumbnailUrl: existing.thumbnailUrl || cleaned.thumbnailUrl,
+                            syncStatus: existing.syncStatus === 'uploading' ? 'uploading' : cleaned.syncStatus
+                        };
+                    }
+                    return cleaned;
+                });
+            });
         });
 
         fetchExports();
@@ -307,7 +323,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setItems([]);
         setExportHistory([]);
     }
-  }, [session, fetchExports]);
+  }, [session?.user?.id, session?.user?.email, fetchExports]);
 
   // File Cache now stores actual File objects, populated on upload or rehydration from DB
   const [fileCache, setFileCache] = useState<Map<string, File>>(new Map());
