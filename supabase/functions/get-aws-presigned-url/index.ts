@@ -6,7 +6,8 @@ import {
   CreateMultipartUploadCommand,
   UploadPartCommand,
   CompleteMultipartUploadCommand,
-  AbortMultipartUploadCommand
+  AbortMultipartUploadCommand,
+  ListPartsCommand
 } from "npm:@aws-sdk/client-s3"
 import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3"
@@ -115,11 +116,23 @@ serve(async (req) => {
 
       // Multipart: Complete
       if (action === 'completeMultipart') {
+        // Fetch parts automatically from S3 to bypass strict CORS ETag limitations
+        const listCommand = new ListPartsCommand({
+           Bucket: bucketName,
+           Key: reqKey,
+           UploadId: uploadId
+        });
+        const listRes = await s3Client.send(listCommand);
+        const actualParts = listRes.Parts?.map((p: any) => ({
+           ETag: p.ETag,
+           PartNumber: p.PartNumber
+        })) || [];
+
         const command = new CompleteMultipartUploadCommand({
           Bucket: bucketName,
           Key: reqKey,
           UploadId: uploadId,
-          MultipartUpload: { Parts: parts },
+          MultipartUpload: { Parts: actualParts },
         });
         await s3Client.send(command);
         return new Response(JSON.stringify({ success: true, key: reqKey }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

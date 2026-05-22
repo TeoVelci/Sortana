@@ -145,10 +145,9 @@ export const multipartUploadFileToS3 = async (
           
           if (!res.ok) throw new Error(`Upload part ${partNumber} failed: ${res.status}`);
           
-          const etag = res.headers.get('ETag') || res.headers.get('etag');
-          if (!etag) throw new Error("No ETag returned for part");
-          
-          return { ETag: etag.replace(/"/g, ''), PartNumber: partNumber };
+          // Bypass client-side ETag validation due to AWS S3 CORS restrictions.
+          // The edge function will fetch the ETags directly via ListPartsCommand.
+          return { PartNumber: partNumber };
         } catch (err) {
           retries--;
           if (retries === 0) throw err;
