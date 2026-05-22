@@ -1613,11 +1613,16 @@ export const proposeOrganization = async (files: FileManifest[], strategy: Organ
 
 // ... (Tools and Copilot Init - Updated to use getAI inside init if needed, but chat usually persisted)
 // Copilot chat init usually needs a one-time instance, we'll keep it as is but use getAI helper logic
-const setFiltersTool: FunctionDeclaration = { name: 'set_filters', description: 'Filter files.', parameters: { type: Type.OBJECT, properties: { rating: { type: Type.NUMBER }, flag: { type: Type.STRING }, search: { type: Type.STRING } } } };
-const createFolderTool: FunctionDeclaration = { name: 'create_folder', description: 'Create folder.', parameters: { type: Type.OBJECT, properties: { name: { type: Type.STRING } }, required: ['name'] } };
-const listProjectsTool: FunctionDeclaration = { name: 'list_projects', description: 'List projects.', parameters: { type: Type.OBJECT, properties: { refresh: { type: Type.BOOLEAN } } } };
-const navigateTool: FunctionDeclaration = { name: 'navigate', description: 'Navigate.', parameters: { type: Type.OBJECT, properties: { page: { type: Type.STRING } }, required: ['page'] } };
-const getStatsTool: FunctionDeclaration = { name: 'get_storage_stats', description: 'Get stats.', parameters: { type: Type.OBJECT, properties: { unit: { type: Type.STRING } } } };
+const setFiltersTool: FunctionDeclaration = { 
+    name: 'set_filters', 
+    description: 'Use this to filter the user\\'s current view of their files. The search string checks tags, filenames, and camera models. For example, if they ask for "sunny photos with a Canon camera", pass search: "sunny Canon".', 
+    parameters: { type: Type.OBJECT, properties: { rating: { type: Type.NUMBER, description: '1-5 star rating' }, flag: { type: Type.STRING, description: 'keep, review, or reject' }, search: { type: Type.STRING, description: 'Keywords to search for (tags, camera models, content)' } } } 
+};
+const createFolderTool: FunctionDeclaration = { name: 'create_folder', description: 'Create a new project folder in the root directory.', parameters: { type: Type.OBJECT, properties: { name: { type: Type.STRING } }, required: ['name'] } };
+const listProjectsTool: FunctionDeclaration = { name: 'list_projects', description: 'Returns a list of the user\\'s top-level project folders.', parameters: { type: Type.OBJECT, properties: { refresh: { type: Type.BOOLEAN } } } };
+const navigateTool: FunctionDeclaration = { name: 'navigate', description: 'Navigate the user to a different page in the app (e.g., "dashboard", "files", "account").', parameters: { type: Type.OBJECT, properties: { page: { type: Type.STRING } }, required: ['page'] } };
+const getStatsTool: FunctionDeclaration = { name: 'get_storage_stats', description: 'Retrieve the user\\'s storage usage statistics.', parameters: { type: Type.OBJECT, properties: { unit: { type: Type.STRING } } } };
+
 export const copilotTools = [setFiltersTool, createFolderTool, listProjectsTool, navigateTool, getStatsTool];
 
 export const initializeCopilotChat = (): Chat => {
@@ -1625,7 +1630,10 @@ export const initializeCopilotChat = (): Chat => {
     return ai.chats.create({
         model: 'gemini-2.5-flash',
         config: {
-            systemInstruction: `You are Sortana Copilot.`,
+            systemInstruction: `You are Sortana Copilot, an AI assistant embedded within a professional photo organization app called Sortana.
+Your primary goal is to help the user manage their workspace instantly by calling tools. 
+CRITICAL RULE: DO NOT ask clarifying questions if you can reasonably infer what the user wants. If they say "show me sunny photos taken with a Canon camera", IMMEDIATELY call the set_filters tool with search="sunny Canon". Do not ask them how their photos are flagged or if they want to filter by camera. Just execute the filter!
+Keep your conversational responses extremely brief, as the UI action itself provides the primary feedback.`,
             tools: [{ functionDeclarations: copilotTools }]
         }
     });
