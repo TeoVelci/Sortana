@@ -1275,6 +1275,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Define the upload task for this file
       uploadTasks.push(async () => {
           try {
+              let finalPreviewUrl = previewUrl;
+              let finalThumbnailUrl = thumbnailUrl;
+              
+              // UPLOAD PREVIEW & THUMBNAIL FIRST
+              // This ensures that even if the massive RAW upload is interrupted, 
+              // the previews are already safely in S3 and won't throw a PREVIEW ERROR 
+              // when the browser garbage-collects the transient blob: URLs.
+              if (previewBlob && (fType === 'raw' || f.size > 5 * 1024 * 1024)) {
+                  try {
+                      const previewName = `preview-${f.name}.jpg`;
+                      const { url: pUrl, key: pKey } = await getPresignedUrl(previewName, 'image/jpeg');
+                      await uploadFileToS3(previewBlob, pUrl);
+                      finalPreviewUrl = getPublicUrl(pKey);
+                      
+                      // Optimistically update the UI with the persistent URL immediately
+                      setItems(prev => prev.map(i => i.id === id ? { ...i, previewUrl: finalPreviewUrl } : i));
+                      bulkUpdateMetadata([id], { previewUrl: finalPreviewUrl });
+                      
+                      if (thumbnailBlob) {
+                          const thumbName = `thumb-${f.name}.jpg`;
+                          const { url: tUrl, key: tKey } = await getPresignedUrl(thumbName, 'image/jpeg');
+                          await uploadFileToS3(thumbnailBlob, tUrl);
+                          finalThumbnailUrl = getPublicUrl(tKey);
+                          setItems(prev => prev.map(i => i.id === id ? { ...i, thumbnailUrl: finalThumbnailUrl } : i));
+                          bulkUpdateMetadata([id], { thumbnailUrl: finalThumbnailUrl });
+                      }
+                  } catch (pErr) {
+                      console.warn(`Preview/Thumbnail upload failed for ${f.name}, falling back to local blobs`, pErr);
+                  }
+              }
+
+              // UPLOAD MAIN FILE
               let key: string;
               if (f.size > 15 * 1024 * 1024) {
                   const result = await multipartUploadFileToS3(f, f.name);
@@ -1283,28 +1315,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   const presign = await getPresignedUrl(f.name, f.type);
                   key = presign.key;
                   await uploadFileToS3(f, presign.url);
-              }
-              
-              let finalPreviewUrl = previewUrl;
-              let finalThumbnailUrl = thumbnailUrl;
-              
-              // UPLOAD PREVIEW & THUMBNAIL BLOBS FOR PERSISTENCE
-              if (previewBlob && (fType === 'raw' || f.size > 5 * 1024 * 1024)) {
-                  try {
-                      const previewName = `preview-${f.name}.jpg`;
-                      const { url: pUrl, key: pKey } = await getPresignedUrl(previewName, 'image/jpeg');
-                      await uploadFileToS3(previewBlob, pUrl);
-                      finalPreviewUrl = getPublicUrl(pKey);
-                      
-                      if (thumbnailBlob) {
-                          const thumbName = `thumb-${f.name}.jpg`;
-                          const { url: tUrl, key: tKey } = await getPresignedUrl(thumbName, 'image/jpeg');
-                          await uploadFileToS3(thumbnailBlob, tUrl);
-                          finalThumbnailUrl = getPublicUrl(tKey);
-                      }
-                  } catch (pErr) {
-                      console.warn(`Preview/Thumbnail upload failed for ${f.name}, falling back to local blobs`, pErr);
-                  }
               }
 
               const finalS3Url = getPublicUrl(key);
