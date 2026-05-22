@@ -490,6 +490,8 @@ const extractPreviewFromRaw = async (file) => {
                         // We'll read a larger slice to find the end
                         const searchSlice = file.slice(absoluteStart, absoluteStart + 15 * 1024 * 1024); // Up to 15MB for a single preview
                         const searchBuffer = await searchSlice.arrayBuffer();
+                        const searchBytes = new Uint8Array(searchBuffer);
+                        
                         // Robust JPEG marker parser to skip EXIF thumbnails and find the true End of Image
                         let end = -1;
                         let sOffset = 2; // skip FF D8
@@ -983,7 +985,7 @@ export const getFriendlyCameraName = (make: string | null, model: string | null)
             'FC2204': 'DJI Mavic 2 Zoom',
             'FC8282': 'DJI Phantom 4 Pro'
         };
-        const upper = name.toUpperCase();
+        const upper = name.toUpperCase().replace('DJI ', '').trim();
         if (djiMappings[upper]) return djiMappings[upper];
         if (!name || name === brand) return 'DJI Drone';
         return `DJI ${name.replace('DJI ', '')}`;
