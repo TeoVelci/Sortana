@@ -304,9 +304,6 @@ export const TourProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const el = document.getElementById(step.targetId);
         
         if (el) {
-            // 1. Scroll into view smoothly
-            el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-
             // 2. Wait slightly for scroll (though observer is better, timeout works for simple tours)
             // We calculate immediately but might need to re-calc if scroll happens
             const rect = el.getBoundingClientRect();
@@ -394,6 +391,36 @@ export const TourProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         window.removeEventListener('scroll', updatePosition, true);
     };
   }, [isOpen, currentStepIndex, activeTourId, endTour]);
+
+  // --- Scroll to active step exactly ONCE when it changes ---
+  useEffect(() => {
+      if (!isOpen || !activeTourId) return;
+      const steps = TOURS[activeTourId];
+      const step = steps[currentStepIndex];
+      if (!step) return;
+
+      const timer = setTimeout(() => {
+          const el = document.getElementById(step.targetId);
+          if (el) {
+              const rect = el.getBoundingClientRect();
+              const isMobile = window.innerWidth < 768;
+              
+              // Only smooth scroll if element is significantly outside viewport to prevent jitter
+              const isFullyVisible = (
+                  rect.top >= 0 &&
+                  rect.left >= 0 &&
+                  rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+                  rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+              );
+
+              if (!isFullyVisible) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: isMobile ? 'nearest' : 'center' });
+              }
+          }
+      }, 50); // slight delay to let DOM settle (like opening menus)
+
+      return () => clearTimeout(timer);
+  }, [isOpen, currentStepIndex, activeTourId]);
 
   // Keyboard Nav
   useEffect(() => {
