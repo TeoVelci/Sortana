@@ -916,7 +916,16 @@ const Browse: React.FC = () => {
             ))}
           </nav>
           <div className="flex items-center gap-3">
-            {/* NEW LOCATION FOR HOME BUTTON */}
+            {/* NEW LOCATION FOR HOME & BACK BUTTONS */}
+            {breadcrumbs.length > 1 && (
+                <button 
+                    onClick={() => navigateTo(breadcrumbs[breadcrumbs.length - 2].id)} 
+                    className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400 transition-colors shrink-0"
+                    title="Go Back"
+                >
+                    <i className="fa-solid fa-arrow-left"></i>
+                </button>
+            )}
             <button 
                 onClick={() => navigateTo(null)} 
                 className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400 transition-colors shrink-0"
