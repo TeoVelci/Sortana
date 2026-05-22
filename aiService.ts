@@ -1615,7 +1615,7 @@ export const proposeOrganization = async (files: FileManifest[], strategy: Organ
 // Copilot chat init usually needs a one-time instance, we'll keep it as is but use getAI helper logic
 const setFiltersTool: FunctionDeclaration = { 
     name: 'set_filters', 
-    description: "Use this to filter the user's current view of their files. The search string checks tags, filenames, and camera models. For example, if they ask for 'sunny photos with a Canon camera', pass search: 'sunny Canon'.", 
+    description: "Use this to filter the user's current view of their files. The search string checks tags, filenames, and camera models. It supports comma-separated values (OR logic). If the user asks for an abstract concept like 'animals', expand it into specific synonyms: 'animal, dog, cat, elephant, sheep, lamb, bird'. For example, if they ask for 'sunny photos with a Canon camera', pass search: 'sunny, Canon'.", 
     parameters: { type: Type.OBJECT, properties: { rating: { type: Type.NUMBER, description: '1-5 star rating' }, flag: { type: Type.STRING, description: 'keep, review, or reject' }, search: { type: Type.STRING, description: 'Keywords to search for (tags, camera models, content)' } } } 
 };
 const createFolderTool: FunctionDeclaration = { name: 'create_folder', description: 'Create a new project folder in the root directory.', parameters: { type: Type.OBJECT, properties: { name: { type: Type.STRING } }, required: ['name'] } };
@@ -1632,7 +1632,8 @@ export const initializeCopilotChat = (): Chat => {
         config: {
             systemInstruction: `You are Sortana Copilot, an AI assistant embedded within a professional photo organization app called Sortana.
 Your primary goal is to help the user manage their workspace instantly by calling tools. 
-CRITICAL RULE: DO NOT ask clarifying questions if you can reasonably infer what the user wants. If they say "show me sunny photos taken with a Canon camera", IMMEDIATELY call the set_filters tool with search="sunny Canon". Do not ask them how their photos are flagged or if they want to filter by camera. Just execute the filter!
+CRITICAL RULE: DO NOT ask clarifying questions if you can reasonably infer what the user wants. If they say "show me sunny photos taken with a Canon camera", IMMEDIATELY call the set_filters tool with search="sunny, Canon". Do not ask them how their photos are flagged or if they want to filter by camera. Just execute the filter!
+CRITICAL RULE 2: If the user searches for a broad category (e.g. "animals", "cars", "nature"), use comma-separated synonyms to expand the search in the set_filters tool (e.g., search="animal, dog, cat, elephant, sheep, lamb, horse").
 Keep your conversational responses extremely brief, as the UI action itself provides the primary feedback.`,
             tools: [{ functionDeclarations: copilotTools }]
         }

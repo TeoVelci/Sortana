@@ -424,30 +424,43 @@ const Browse: React.FC = () => {
 
   const getMatchSnippet = useCallback((item: FileSystemItem, query: string) => {
       if (!query) return null;
-      const q = query.toLowerCase();
+      const terms = query.toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+      if (terms.length === 0) return null;
 
       // 1. Moments (Priority for video)
       if (item.videoMetadata?.moments) {
-          const moment = item.videoMetadata.moments.find(m => m.description.toLowerCase().includes(q));
-          if (moment) return { type: 'moment', text: moment.description, timestamp: moment.timestamp };
+          for (const q of terms) {
+              const moment = item.videoMetadata.moments.find(m => m.description.toLowerCase().includes(q));
+              if (moment) return { type: 'moment', text: moment.description, timestamp: moment.timestamp };
+          }
       }
 
       // 2. Video Summary
-      if (item.videoMetadata?.summary?.toLowerCase().includes(q)) {
-          return { type: 'context', text: item.videoMetadata.summary };
+      for (const q of terms) {
+          if (item.videoMetadata?.summary?.toLowerCase().includes(q)) {
+              return { type: 'context', text: item.videoMetadata.summary };
+          }
       }
 
       // 3. AI Description
-      if (item.description?.toLowerCase().includes(q)) {
-          return { type: 'context', text: item.description };
+      for (const q of terms) {
+          if (item.description?.toLowerCase().includes(q)) {
+              return { type: 'context', text: item.description };
+          }
       }
 
       // 4. Tags
-      const tag = Array.isArray(item.tags) ? item.tags.find((t: any) => typeof t === 'string' && t.toLowerCase().includes(q)) : undefined;
-      if (tag) return { type: 'tag', text: tag };
+      for (const q of terms) {
+          const tag = Array.isArray(item.tags) ? item.tags.find((t: any) => typeof t === 'string' && t.toLowerCase().includes(q)) : undefined;
+          if (tag) return { type: 'tag', text: tag };
+      }
 
       // 5. Explicit Name Match (fallback, usually obvious)
-      if (item.name.toLowerCase().includes(q)) {
+      for (const q of terms) {
+          if (item.name.toLowerCase().includes(q)) {
+              return null; 
+          }
+      }
           // No need to show snippet for name match usually, but we can if we want consistency
           return null; 
       }
@@ -464,16 +477,16 @@ const Browse: React.FC = () => {
     // 1. Parent/Folder Scope
     const inFolder = (item.parentId || null) === (currentFolderId || null);
     
-    // 2. Search Scope (Deep Context Search)
-    const q = searchQuery ? searchQuery.toLowerCase() : '';
-    const matchesSearch = searchQuery ? (
+    // 2. Search Scope (Deep Context Search - supports comma-separated OR logic)
+    const terms = searchQuery ? searchQuery.toLowerCase().split(',').map(s => s.trim()).filter(Boolean) : [];
+    const matchesSearch = terms.length > 0 ? terms.some(q => (
         item.name.toLowerCase().includes(q) || 
         (Array.isArray(item.tags) && item.tags.some((t: any) => typeof t === 'string' && t.toLowerCase().includes(q))) ||
         (item.description && item.description.toLowerCase().includes(q)) ||
         (item.videoMetadata?.title && item.videoMetadata.title.toLowerCase().includes(q)) ||
         (item.videoMetadata?.summary && item.videoMetadata.summary.toLowerCase().includes(q)) ||
         (item.videoMetadata?.moments && item.videoMetadata.moments.some(m => m.description.toLowerCase().includes(q)))
-    ) : true;
+    )) : true;
     
     // 3. Filters (Only apply to files)
     let matchesFilter = true;
@@ -496,7 +509,13 @@ const Browse: React.FC = () => {
         }
     }
 
-    if (searchQuery) return matchesSearch && matchesFilter;
+    const hasGlobalFilter = terms.length > 0 || filterRating > 0 || filterFlag !== 'all';
+    
+    if (hasGlobalFilter) {
+        if (item.type === 'folder') return false; // Hide folders when searching/filtering globally
+        return matchesSearch && matchesFilter;
+    }
+    
     return inFolder && (item.type === 'folder' || matchesFilter);
   });
 
