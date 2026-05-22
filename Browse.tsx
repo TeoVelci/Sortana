@@ -342,6 +342,7 @@ const Browse: React.FC = () => {
       addGeneratedFile, 
       retryUpload,
       moveItems,
+      duplicateItems,
       formatSize,
       user,
       currentFolderId,
