@@ -55,8 +55,8 @@ const AutoOrganizeModal: React.FC<AutoOrganizeModalProps> = ({ isOpen, onClose }
             newCandidates.push({ id: null, name: 'Main Library (Root)', count: rootFilesCount });
         }
 
-        // 2. Check Folders
-        const folders = items.filter(i => i.type === 'folder');
+        // 2. Check Folders (Only Root Level Projects)
+        const folders = items.filter(i => i.type === 'folder' && !i.parentId);
         folders.forEach(f => {
             // Count files directly inside this folder
             const count = items.filter(i => i.type === 'file' && (i.parentId || null) === (f.id || null)).length;
@@ -92,7 +92,7 @@ const AutoOrganizeModal: React.FC<AutoOrganizeModalProps> = ({ isOpen, onClose }
       const manifest: FileManifest[] = targetFiles.map(f => ({
           id: f.id,
           name: f.name,
-          date: f.dateAdded,
+          date: f.dateTaken || f.dateAdded,
           type: f.fileType || 'doc',
           make: f.make,
           model: f.model
