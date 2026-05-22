@@ -7,6 +7,7 @@ import { supabase } from './supabaseClient';
 import MagicEditor from './MagicEditor';
 import ExportModal from './ExportModal';
 import CleanupModal from './CleanupModal';
+import { useTour } from './TourContext';
 // Removed react-window imports
 
 // --- Subcomponents ---
@@ -344,6 +345,7 @@ const Browse: React.FC = () => {
   } = useApp();
   
   const { showToast } = useToast();
+  const { activeTourId } = useTour();
   
   // Navigation State Logic (Dynamic Breadcrumbs)
   const breadcrumbs = React.useMemo(() => {
@@ -917,9 +919,14 @@ const Browse: React.FC = () => {
           </nav>
           <div className="flex items-center gap-3">
             {/* NEW LOCATION FOR HOME & BACK BUTTONS */}
-            {breadcrumbs.length > 1 && (
+            {(breadcrumbs.length > 1 || activeTourId === 'browse') && (
                 <button 
-                    onClick={() => navigateTo(breadcrumbs[breadcrumbs.length - 2].id)} 
+                    id="browse-back-btn"
+                    onClick={() => {
+                        if (breadcrumbs.length > 1) {
+                            navigateTo(breadcrumbs[breadcrumbs.length - 2].id);
+                        }
+                    }} 
                     className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400 transition-colors shrink-0"
                     title="Go Back"
                 >

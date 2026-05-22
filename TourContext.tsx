@@ -85,6 +85,11 @@ const TOURS: Record<TourId, TourStep[]> = {
       content: 'Don\'t just search filenames. Type "Sunset", "Wedding Cake", or "Blue Dress" to find content using AI vision.',
     },
     {
+      targetId: 'browse-back-btn',
+      title: 'Folder Navigation',
+      content: 'Use this back arrow to instantly go up a level, or tap the Home button next to it to return to your main Projects.',
+    },
+    {
       targetId: 'browse-grid',
       title: 'Infinite Canvas',
       content: 'Double-click any item to preview it. Drag to select multiple items for bulk actions.',
