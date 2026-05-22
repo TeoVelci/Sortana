@@ -405,8 +405,7 @@ const extractDetailedMetadata = async (file) => {
         if (ifd0Offset < 8 || tiffStart + ifd0Offset > length) return result;
         const readTagValue = (offset, type, count) => {
             if (type === 2) {
-                const valueOffset = count > 4 ? view.getUint32(offset + 8, isLittleEndian) : offset + 8;
-                const actualOffset = tiffStart + valueOffset;
+                const actualOffset = count > 4 ? tiffStart + view.getUint32(offset + 8, isLittleEndian) : offset + 8;
                 if (actualOffset + count > length) return null;
                 let str = '';
                 for (let i = 0; i < count; i++) {
@@ -470,10 +469,9 @@ const extractPreviewFromRaw = async (file) => {
         const OVERLAP = 1024; // 1KB overlap
         const candidates = [];
         
-        // Scan the first 20MB and last 10MB - most previews are there
+        // Scan the first 100MB to ensure we don't miss previews in the middle of large raw files
         const scanRanges = [
-            { start: 0, end: Math.min(fileSize, 20 * 1024 * 1024) },
-            { start: Math.max(0, fileSize - 10 * 1024 * 1024), end: fileSize }
+            { start: 0, end: Math.min(fileSize, 100 * 1024 * 1024) }
         ];
 
         for (const range of scanRanges) {
