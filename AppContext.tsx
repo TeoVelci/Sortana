@@ -1536,6 +1536,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     if (itemsToDelete.length === 0) return;
 
+    // Optimistically update UI immediately
+    setItems(prev => prev.filter(i => !allIdsToDelete.has(i.id)));
+    setRecentActivity(prev => prev.filter(a => !allIdsToDelete.has(a.projectId)));
+
     const performDelete = async () => {
         for (const id of allIdsToDelete) {
             try { 
@@ -1545,11 +1549,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 // Ignore deletion errors
             }
         }
-        setItems(prev => prev.filter(i => !allIdsToDelete.has(i.id)));
-        setRecentActivity(prev => prev.filter(a => !allIdsToDelete.has(a.projectId)));
     };
     
-    performDelete();
+    performDelete(); // Fire and forget
     
     addToHistory({
         description: `Delete ${itemsToDelete.length} items`,
