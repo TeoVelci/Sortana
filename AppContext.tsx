@@ -1152,6 +1152,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       let make: string | undefined; 
       let model: string | undefined;
       let rawMetadata: string | undefined;
+      let isFallbackDate = true;
 
       try {
           // Generate high-res preview (2560px)
@@ -1180,10 +1181,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
 
           const meta = await extractDetailedMetadata(f);
-          if (meta.dateTaken) dateTaken = meta.dateTaken.getTime();
+          if (meta.dateTaken) {
+              dateTaken = meta.dateTaken.getTime();
+              isFallbackDate = false; // Successfully extracted real date
+          }
           if (meta.make) make = meta.make;
           if (meta.model) model = meta.model;
           rawMetadata = meta.rawMetadata;
+
+          // Ultimate Fallback for DJI files to prevent Unknown Camera even if Worker fails
+          const isUnknownMake = !make || make.toLowerCase().includes('unknown') || make.trim() === '';
+          if (isUnknownMake && f.name.toUpperCase().startsWith('DJI_')) {
+              make = 'DJI';
+              if (!model || model.toLowerCase().includes('unknown')) {
+                  model = 'Drone';
+              }
+          }
 
           // Sidecar XML Fast Track (If binary scan failed or returned generic)
           if (fType === 'video' && (!model || model.toLowerCase() === 'sony camera' || model.toLowerCase() === 'sony')) {
@@ -1244,6 +1257,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         parentId: parentId,
         dateAdded: Date.now(),
         dateTaken: dateTaken,
+        isFallbackDate,
         previewUrl, 
         thumbnailUrl,
         rating: 0,
@@ -1392,12 +1406,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     for (let i = 0; i < newItems.length; i++) {
         const current = newItems[i];
-        if (current.type !== 'file' || (current.fileType !== 'image' && current.fileType !== 'raw')) continue;
+        if (current.type !== 'file' || (current.fileType !== 'image' && current.fileType !== 'raw') || current.isFallbackDate) continue;
 
         const burstIds = [current.id];
         let j = i + 1;
         while(j < newItems.length) {
             const next = newItems[j];
+            if (next.isFallbackDate) {
+                // Do not stack files that do not have a real EXIF date
+                break;
+            }
             const prevInBurst = newItems[j - 1]; // Compare to the immediately preceding frame, not the first frame!
             
             if (next.type === 'file' && (next.fileType === 'image' || next.fileType === 'raw') && 
