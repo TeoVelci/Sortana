@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from './AppContext';
 import Copilot from './Copilot';
@@ -16,6 +17,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [isExportsOpen, setIsExportsOpen] = useState<boolean>(false);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -198,54 +206,106 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </button>
             
             {isExportsOpen && (
-              <>
-                <div className="fixed inset-0 z-40 bg-black/20 sm:bg-transparent transition-opacity" onClick={() => setIsExportsOpen(false)}></div>
-                <div className="fixed sm:absolute bottom-0 sm:bottom-auto left-0 sm:left-auto right-0 sm:right-0 sm:top-full sm:mt-2 w-full sm:w-72 bg-white dark:bg-surface-dark border-t sm:border border-gray-200 dark:border-white/10 rounded-t-2xl sm:rounded-lg shadow-2xl z-50 overflow-hidden flex flex-col max-h-[80vh] sm:max-h-96 pb-6 sm:pb-0 transition-transform duration-300 translate-y-0 sm:translate-y-0 slide-up-animation">
-                  <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5 flex justify-between items-center">
-                    <h3 className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Recent Exports</h3>
-                    <button onClick={() => setIsExportsOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
-                      <i className="fa-solid fa-xmark"></i>
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto">
-                    {exportHistory.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-gray-500">No recent exports.</div>
-                    ) : (
-                      exportHistory.map(job => (
-                        <button
-                          key={job.id}
-                          onClick={() => {
-                            if (job.status === 'completed') {
-                              triggerDownload(job);
-                              setIsExportsOpen(false);
-                            }
-                          }}
-                          className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 flex flex-col gap-1 transition-colors ${!seenExportIds.includes(job.id) && job.status === 'completed' ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                              {job.total_files ? `${job.total_files} items` : 'Export'}
-                              {job.status === 'completed' && (
-                                <i className="fa-solid fa-cloud-arrow-down text-primary opacity-80" title="Click to download"></i>
-                              )}
+              isMobile ? createPortal(
+                <>
+                  <div className="fixed inset-0 z-[100] bg-black/20 transition-opacity" onClick={() => setIsExportsOpen(false)}></div>
+                  <div className="fixed bottom-0 left-0 right-0 w-full bg-white dark:bg-surface-dark border-t border-gray-200 dark:border-white/10 rounded-t-2xl shadow-2xl z-[101] overflow-hidden flex flex-col max-h-[80vh] pb-6 slide-up-animation">
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5 flex justify-between items-center">
+                      <h3 className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Recent Exports</h3>
+                      <button onClick={() => setIsExportsOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto">
+                      {exportHistory.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-gray-500">No recent exports.</div>
+                      ) : (
+                        exportHistory.map(job => (
+                          <button
+                            key={job.id}
+                            onClick={() => {
+                              if (job.status === 'completed') {
+                                triggerDownload(job);
+                                setIsExportsOpen(false);
+                              }
+                            }}
+                            className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 flex flex-col gap-1 transition-colors ${!seenExportIds.includes(job.id) && job.status === 'completed' ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                                {job.total_files ? `${job.total_files} items` : 'Export'}
+                                {job.status === 'completed' && (
+                                  <i className="fa-solid fa-cloud-arrow-down text-primary opacity-80" title="Click to download"></i>
+                                )}
+                              </span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                job.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
+                                job.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
+                                'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
+                              }`}>
+                                {job.status === 'completed' ? 'Ready' : job.status}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {new Date(job.created_at).toLocaleString()}
                             </span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                              job.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
-                              job.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
-                              'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
-                            }`}>
-                              {job.status === 'completed' ? 'Ready' : job.status}
-                            </span>
-                          </div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {new Date(job.created_at).toLocaleString()}
-                          </span>
-                        </button>
-                      ))
-                    )}
+                          </button>
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
-              </>
+                </>,
+                document.body
+              ) : (
+                <>
+                  <div className="fixed inset-0 z-40 bg-transparent transition-opacity" onClick={() => setIsExportsOpen(false)}></div>
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-surface-dark border border-gray-200 dark:border-white/10 rounded-lg shadow-2xl z-50 overflow-hidden flex flex-col max-h-96 pb-0 transition-transform duration-300 translate-y-0">
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5 flex justify-between items-center">
+                      <h3 className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Recent Exports</h3>
+                      <button onClick={() => setIsExportsOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto">
+                      {exportHistory.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-gray-500">No recent exports.</div>
+                      ) : (
+                        exportHistory.map(job => (
+                          <button
+                            key={job.id}
+                            onClick={() => {
+                              if (job.status === 'completed') {
+                                triggerDownload(job);
+                                setIsExportsOpen(false);
+                              }
+                            }}
+                            className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 flex flex-col gap-1 transition-colors ${!seenExportIds.includes(job.id) && job.status === 'completed' ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                                {job.total_files ? `${job.total_files} items` : 'Export'}
+                                {job.status === 'completed' && (
+                                  <i className="fa-solid fa-cloud-arrow-down text-primary opacity-80" title="Click to download"></i>
+                                )}
+                              </span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                job.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
+                                job.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
+                                'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
+                              }`}>
+                                {job.status === 'completed' ? 'Ready' : job.status}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {new Date(job.created_at).toLocaleString()}
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              )
             )}
           </div>
 
