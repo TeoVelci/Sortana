@@ -106,6 +106,7 @@ const Account: React.FC = () => {
                       value={user.plan}
                       onChange={(e) => updateUser({ plan: e.target.value })}
                       className="bg-white dark:bg-dark-800 border border-gray-300 dark:border-dark-600 rounded-lg text-sm px-3 py-2 text-gray-900 dark:text-white outline-none focus:ring-1 focus:ring-yellow-500"
+                  >
                       <option value="Free">Free</option>
                       <option value="Basic">Basic</option>
                       <option value="Pro">Pro</option>
