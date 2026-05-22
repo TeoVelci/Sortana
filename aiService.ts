@@ -445,6 +445,15 @@ const extractDetailedMetadata = async (file) => {
                 } else if (tag === 0x8769) {
                     const exifOffset = view.getUint32(entryOffset + 8, isLittleEndian);
                     parseIFD(exifOffset);
+                } else if (tag === 0x014A) {
+                    // SubIFDs
+                    const valOffset = count > 4 ? view.getUint32(entryOffset + 8, isLittleEndian) : entryOffset + 8;
+                    for (let j = 0; j < count; j++) {
+                        if (tiffStart + valOffset + j * 4 + 4 <= length) {
+                            const subIfdOffset = view.getUint32(tiffStart + valOffset + j * 4, isLittleEndian);
+                            parseIFD(subIfdOffset);
+                        }
+                    }
                 } else if (tag === 0x9003 || tag === 0x9004) {
                     const val = readTagValue(entryOffset, type, count);
                     if (typeof val === 'string') {
@@ -453,9 +462,22 @@ const extractDetailedMetadata = async (file) => {
                     }
                 }
             }
+            // Parse next IFD
+            const nextIfdPointerOffset = tiffStart + offset + 2 + (numEntries * 12);
+            if (nextIfdPointerOffset + 4 <= length) {
+                const nextIfdOffset = view.getUint32(nextIfdPointerOffset, isLittleEndian);
+                if (nextIfdOffset !== 0) {
+                    parseIFD(nextIfdOffset);
+                }
+            }
         };
         parseIFD(ifd0Offset);
     } catch (e) {}
+
+    // Fallbacks
+    if (!result.make && file.name.toUpperCase().startsWith('DJI_')) {
+        result.make = 'DJI';
+    }
 
     applyAppleFallback();
 
