@@ -474,26 +474,31 @@ const extractDetailedMetadata = async (file) => {
         parseIFD(ifd0Offset);
     } catch (e) {}
 
-    // Fallback: XMP Metadata Scan (If EXIF was stripped but XMP remains)
+    // Fallback: Ultimate Brute-Force Scan (If EXIF was stripped but MakerNote or XMP remains anywhere)
     try {
         if (!result.make || result.make.toLowerCase().includes('unknown') || !result.model || result.model.toLowerCase().includes('unknown')) {
-            const scanBuffer = arrayBuffer.slice(0, 2 * 1024 * 1024);
             const decoder = new TextDecoder('utf-8', { fatal: false });
-            let text = decoder.decode(scanBuffer);
+            const chunkSize = 5 * 1024 * 1024;
+            let found = false;
             
-            let makeMatch = text.match(/(?:tiff:Make|drone-dji:Make)[=">\\s]+([^"<]+)/i);
-            let modelMatch = text.match(/(?:tiff:Model|drone-dji:Model)[=">\\s]+([^"<]+)/i);
-
-            // If not found in the header, XMP might be appended at the very end of the file
-            if ((!makeMatch || !modelMatch) && file.size > 2 * 1024 * 1024) {
-                const tailSlice = await file.slice(Math.max(0, file.size - 1024 * 1024)).arrayBuffer();
-                const tailText = decoder.decode(tailSlice);
-                makeMatch = makeMatch || tailText.match(/(?:tiff:Make|drone-dji:Make)[=">\\s]+([^"<]+)/i);
-                modelMatch = modelMatch || tailText.match(/(?:tiff:Model|drone-dji:Model)[=">\\s]+([^"<]+)/i);
+            for (let offset = 0; offset < file.size && !found; offset += chunkSize) {
+                const slice = await file.slice(offset, offset + chunkSize + 1024).arrayBuffer(); // 1KB overlap
+                const text = decoder.decode(slice);
+                
+                let makeMatch = text.match(/(?:tiff:Make|drone-dji:Make)[=">\\s]+([^"<]+)/i);
+                let modelMatch = text.match(/(?:tiff:Model|drone-dji:Model)[=">\\s]+([^"<]+)/i) || 
+                                 text.match(/(FC3411|FC3170|FC7303|FC3582|FC220|L1D-20C|FC2204|FC8282)/i);
+                
+                if (makeMatch) result.make = cleanString(makeMatch[1]);
+                if (modelMatch) {
+                    result.make = 'DJI'; // If we found a DJI codename, the make is definitely DJI
+                    result.model = cleanString(modelMatch[1]);
+                }
+                
+                if (result.model && !result.model.toLowerCase().includes('unknown')) {
+                    found = true;
+                }
             }
-            
-            if (makeMatch) result.make = cleanString(makeMatch[1]);
-            if (modelMatch) result.model = cleanString(modelMatch[1]);
         }
     } catch (e) {}
 
