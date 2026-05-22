@@ -474,6 +474,21 @@ const extractDetailedMetadata = async (file) => {
         parseIFD(ifd0Offset);
     } catch (e) {}
 
+    // Fallback: XMP Metadata Scan (If EXIF was stripped but XMP remains)
+    try {
+        if (!result.make || result.make.toLowerCase().includes('unknown') || !result.model || result.model.toLowerCase().includes('unknown')) {
+            const scanBuffer = arrayBuffer.slice(0, 2 * 1024 * 1024);
+            const decoder = new TextDecoder('utf-8', { fatal: false });
+            const text = decoder.decode(scanBuffer);
+            
+            const makeMatch = text.match(/(?:tiff:Make|drone-dji:Make)[=">\\s]+([^"<]+)/i);
+            const modelMatch = text.match(/(?:tiff:Model|drone-dji:Model)[=">\\s]+([^"<]+)/i);
+            
+            if (makeMatch) result.make = cleanString(makeMatch[1]);
+            if (modelMatch) result.model = cleanString(modelMatch[1]);
+        }
+    } catch (e) {}
+
     // Fallbacks
     const isUnknownMake = !result.make || result.make.toLowerCase().includes('unknown') || result.make.trim() === '';
     if (isUnknownMake && file.name.toUpperCase().startsWith('DJI_')) {
