@@ -1183,7 +1183,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const meta = await extractDetailedMetadata(f);
           if (meta.dateTaken) {
               dateTaken = meta.dateTaken.getTime();
-              isFallbackDate = false; // Successfully extracted real date
+              isFallbackDate = dateTaken === f.lastModified;
           }
           if (meta.make) make = meta.make;
           if (meta.model) model = meta.model;

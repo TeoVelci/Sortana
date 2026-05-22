@@ -151,7 +151,7 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
                         <img 
                             src={item.previewUrl} 
                             alt="Original" 
-                            className="max-w-full max-h-[calc(100dvh-280px)] object-contain"
+                            className="w-full h-full max-h-[calc(100dvh-280px)] object-contain"
                         />
                     )}
                 </div>
@@ -162,7 +162,7 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
                         <img 
                             src={generatedImage} 
                             alt="Edited" 
-                            className={`max-w-full max-h-[calc(100dvh-280px)] object-contain transition-opacity duration-100 ${isComparing ? 'opacity-0' : 'opacity-100'}`}
+                            className={`w-full h-full max-h-[calc(100dvh-280px)] object-contain transition-opacity duration-100 ${isComparing ? 'opacity-0' : 'opacity-100'}`}
                         />
                     </div>
                 )}
