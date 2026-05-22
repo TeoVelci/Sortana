@@ -1123,6 +1123,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }
 
+    // 2. Pre-pass for Enhanced/Edited files to borrow metadata for stripped RAW files
+    const enhancedMetadataDict = new Map<string, { make?: string, model?: string }>();
+    for (const f of files) {
+        const lowerName = f.name.toLowerCase();
+        if (lowerName.includes('-enhanced') || lowerName.includes('-edited')) {
+            try {
+                const meta = await extractDetailedMetadata(f);
+                if ((meta.make && !meta.make.toLowerCase().includes('unknown')) || (meta.model && !meta.model.toLowerCase().includes('unknown'))) {
+                    const baseMatch = f.name.match(/^([a-z0-9_]+)/i);
+                    if (baseMatch) {
+                        enhancedMetadataDict.set(baseMatch[1].toLowerCase(), { make: meta.make, model: meta.model });
+                    }
+                }
+            } catch (e) {}
+        }
+    }
+
     const uploadTasks: (() => Promise<void>)[] = [];
 
     for (const f of files) {
@@ -1188,6 +1205,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (meta.make) make = meta.make;
           if (meta.model) model = meta.model;
           rawMetadata = meta.rawMetadata;
+
+          // Borrow metadata from Enhanced versions if available and our own is missing
+          const baseMatch = f.name.match(/^([a-z0-9_]+)/i);
+          if (baseMatch) {
+              const borrowed = enhancedMetadataDict.get(baseMatch[1].toLowerCase());
+              if (borrowed) {
+                  if (!make || make.toLowerCase().includes('unknown')) make = borrowed.make || make;
+                  if (!model || model.toLowerCase().includes('unknown')) model = borrowed.model || model;
+              }
+          }
 
           // Ultimate Fallback for DJI files to prevent Unknown Camera even if Worker fails
           const isUnknownMake = !make || make.toLowerCase().includes('unknown') || make.trim() === '';
