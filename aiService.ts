@@ -1615,13 +1615,13 @@ export const proposeOrganization = async (files: FileManifest[], strategy: Organ
 // Copilot chat init usually needs a one-time instance, we'll keep it as is but use getAI helper logic
 const setFiltersTool: FunctionDeclaration = { 
     name: 'set_filters', 
-    description: 'Use this to filter the user\\'s current view of their files. The search string checks tags, filenames, and camera models. For example, if they ask for "sunny photos with a Canon camera", pass search: "sunny Canon".', 
+    description: "Use this to filter the user's current view of their files. The search string checks tags, filenames, and camera models. For example, if they ask for 'sunny photos with a Canon camera', pass search: 'sunny Canon'.", 
     parameters: { type: Type.OBJECT, properties: { rating: { type: Type.NUMBER, description: '1-5 star rating' }, flag: { type: Type.STRING, description: 'keep, review, or reject' }, search: { type: Type.STRING, description: 'Keywords to search for (tags, camera models, content)' } } } 
 };
 const createFolderTool: FunctionDeclaration = { name: 'create_folder', description: 'Create a new project folder in the root directory.', parameters: { type: Type.OBJECT, properties: { name: { type: Type.STRING } }, required: ['name'] } };
-const listProjectsTool: FunctionDeclaration = { name: 'list_projects', description: 'Returns a list of the user\\'s top-level project folders.', parameters: { type: Type.OBJECT, properties: { refresh: { type: Type.BOOLEAN } } } };
+const listProjectsTool: FunctionDeclaration = { name: 'list_projects', description: "Returns a list of the user's top-level project folders.", parameters: { type: Type.OBJECT, properties: { refresh: { type: Type.BOOLEAN } } } };
 const navigateTool: FunctionDeclaration = { name: 'navigate', description: 'Navigate the user to a different page in the app (e.g., "dashboard", "files", "account").', parameters: { type: Type.OBJECT, properties: { page: { type: Type.STRING } }, required: ['page'] } };
-const getStatsTool: FunctionDeclaration = { name: 'get_storage_stats', description: 'Retrieve the user\\'s storage usage statistics.', parameters: { type: Type.OBJECT, properties: { unit: { type: Type.STRING } } } };
+const getStatsTool: FunctionDeclaration = { name: 'get_storage_stats', description: "Retrieve the user's storage usage statistics.", parameters: { type: Type.OBJECT, properties: { unit: { type: Type.STRING } } } };
 
 export const copilotTools = [setFiltersTool, createFolderTool, listProjectsTool, navigateTool, getStatsTool];
 
