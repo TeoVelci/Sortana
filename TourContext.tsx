@@ -85,6 +85,11 @@ const TOURS: Record<TourId, TourStep[]> = {
       content: 'Don\'t just search filenames. Type "Sunset", "Wedding Cake", or "Blue Dress" to find content using AI vision.',
     },
     {
+      targetId: 'browse-breadcrumbs',
+      title: 'Move Files',
+      content: 'You can drag and drop files directly onto folder icons to move them, or drop them onto these breadcrumbs to pull them out of a subfolder!',
+    },
+    {
       targetId: 'browse-back-btn',
       title: 'Folder Navigation',
       content: 'Use this back arrow to instantly go up a level, or tap the Home button next to it to return to your main Projects.',

@@ -947,7 +947,7 @@ const Browse: React.FC = () => {
         
         {/* Left: Breadcrumbs & Stats */}
         <div>
-          <nav className="text-xs text-gray-500 mb-2 flex items-center space-x-1 overflow-x-auto">
+          <nav id="browse-breadcrumbs" className="text-xs text-gray-500 mb-2 flex items-center space-x-1 overflow-x-auto">
             {breadcrumbs.map((crumb, idx) => (
               <React.Fragment key={idx}>
                 {idx > 0 && <span className="material-icons-outlined text-[10px]">chevron_right</span>}
