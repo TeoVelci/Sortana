@@ -201,15 +201,52 @@ const Copilot: React.FC = () => {
 
              // Execute Logic
              switch (call.name) {
-                 case 'set_filters':
+                 case 'set_filters': {
+                     const filterRating = args.rating || 0;
+                     const filterFlag = args.flag || 'all';
+                     const searchQuery = args.search || '';
+                     
+                     // Calculate matches to inform the AI
+                     let matchCount = 0;
+                     const terms = searchQuery.toLowerCase().split(',').map((s: string) => s.trim()).filter(Boolean);
+                     
+                     items.forEach(item => {
+                         if (item.type !== 'file' || item.syncStatus === 'deleted') return;
+                         
+                         let matchesSearch = true;
+                         if (terms.length > 0) {
+                             matchesSearch = terms.some(q => (
+                                 item.name.toLowerCase().includes(q) || 
+                                 (Array.isArray(item.tags) && item.tags.some((t: any) => typeof t === 'string' && t.toLowerCase().includes(q))) ||
+                                 (item.description && item.description.toLowerCase().includes(q)) ||
+                                 (item.videoMetadata?.title && item.videoMetadata.title.toLowerCase().includes(q)) ||
+                                 (item.videoMetadata?.summary && item.videoMetadata.summary.toLowerCase().includes(q)) ||
+                                 (item.videoMetadata?.moments && item.videoMetadata.moments.some(m => m.description.toLowerCase().includes(q)))
+                             ));
+                         }
+                         
+                         let matchesFilter = true;
+                         if (filterRating > 0 && (item.rating || 0) < filterRating) matchesFilter = false;
+                         if (filterFlag !== 'all') {
+                             if (filterFlag === 'picked' && item.flag !== 'picked') matchesFilter = false;
+                             if (filterFlag === 'rejected' && item.flag !== 'rejected') matchesFilter = false;
+                             if (filterFlag === 'unflagged' && item.flag) matchesFilter = false;
+                         }
+                         
+                         if (matchesSearch && matchesFilter) {
+                             matchCount++;
+                         }
+                     });
+
                      setViewState({
-                         filterRating: args.rating || 0,
-                         filterFlag: args.flag || 'all',
-                         searchQuery: args.search || ''
+                         filterRating,
+                         filterFlag,
+                         searchQuery
                      });
                      navigate('/browse');
-                     result = { message: "Filters applied successfully." };
+                     result = { message: "Filters applied successfully.", matchingItemsFound: matchCount };
                      break;
+                 }
                  
                  case 'create_folder':
                      createFolder(args.name);
