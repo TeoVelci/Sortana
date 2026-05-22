@@ -873,6 +873,19 @@ const Browse: React.FC = () => {
     }
   };
 
+  const handleCullDelete = () => {
+      if (!activeCullingItem) return;
+      bulkDeleteItems([activeCullingItem.id]);
+      showToast("Item deleted", "info");
+      
+      if (activeCullingList.length <= 1) {
+          setIsCulling(false);
+          setCullingContextItems(null);
+      } else if (cullingIndex >= activeCullingList.length - 1) {
+          setCullingIndex(activeCullingList.length - 2);
+      }
+  };
+
   const handleCullingAction = useCallback((action: string) => {
     if (!activeCullingItem) return;
 
@@ -1568,7 +1581,15 @@ const Browse: React.FC = () => {
                     </div>
                     <p className="text-xs text-gray-400">{cullingIndex + 1} of {activeCullingList.length}</p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 md:gap-4">
+                    <button 
+                        onClick={handleCullDelete}
+                        className="px-3 py-1.5 rounded-full transition-colors flex items-center gap-2 text-sm font-bold bg-white/10 hover:bg-red-500/20 text-white hover:text-red-400 border border-transparent hover:border-red-500/50"
+                        title="Delete"
+                    >
+                        <span className="material-icons-outlined text-sm">delete</span>
+                        <span className="hidden md:inline">Delete</span>
+                    </button>
                     <button 
                         onClick={() => openMagicEditor(activeCullingItem)}
                         className={`px-3 py-1.5 rounded-full transition-colors flex items-center gap-2 text-sm font-bold shadow-neon ${!isProOrAbove ? 'bg-gray-800 text-gray-500 cursor-not-allowed opacity-75' : 'bg-primary hover:bg-primary-hover'}`}
