@@ -479,10 +479,18 @@ const extractDetailedMetadata = async (file) => {
         if (!result.make || result.make.toLowerCase().includes('unknown') || !result.model || result.model.toLowerCase().includes('unknown')) {
             const scanBuffer = arrayBuffer.slice(0, 2 * 1024 * 1024);
             const decoder = new TextDecoder('utf-8', { fatal: false });
-            const text = decoder.decode(scanBuffer);
+            let text = decoder.decode(scanBuffer);
             
-            const makeMatch = text.match(/(?:tiff:Make|drone-dji:Make)[=">\\s]+([^"<]+)/i);
-            const modelMatch = text.match(/(?:tiff:Model|drone-dji:Model)[=">\\s]+([^"<]+)/i);
+            let makeMatch = text.match(/(?:tiff:Make|drone-dji:Make)[=">\\s]+([^"<]+)/i);
+            let modelMatch = text.match(/(?:tiff:Model|drone-dji:Model)[=">\\s]+([^"<]+)/i);
+
+            // If not found in the header, XMP might be appended at the very end of the file
+            if ((!makeMatch || !modelMatch) && file.size > 2 * 1024 * 1024) {
+                const tailSlice = await file.slice(Math.max(0, file.size - 1024 * 1024)).arrayBuffer();
+                const tailText = decoder.decode(tailSlice);
+                makeMatch = makeMatch || tailText.match(/(?:tiff:Make|drone-dji:Make)[=">\\s]+([^"<]+)/i);
+                modelMatch = modelMatch || tailText.match(/(?:tiff:Model|drone-dji:Model)[=">\\s]+([^"<]+)/i);
+            }
             
             if (makeMatch) result.make = cleanString(makeMatch[1]);
             if (modelMatch) result.model = cleanString(modelMatch[1]);
