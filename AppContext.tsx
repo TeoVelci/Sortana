@@ -124,6 +124,7 @@ interface AppContextType {
   bulkDeleteItems: (ids: string[]) => void;
   moveItems: (ids: string[], targetFolderId: string | null) => void;
   duplicateItems: (ids: string[], targetFolderId: string | null) => void;
+  groupItems: (ids: string[]) => void;
   updateItemMetadata: (id: string, updates: Partial<FileSystemItem>) => void;
   executeOrganizationPlan: (plan: FolderPlan[], targetParentId?: string | null) => void;
   analyzeVideoItem: (id: string, fileInfo?: { name: string, type: string }, rawMetadata?: string) => Promise<void>;
@@ -1386,7 +1387,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // 2. AUTO-STACKING (Burst Detection)
     newItems.sort((a, b) => (a.dateTaken || 0) - (b.dateTaken || 0));
-    const BURST_THRESHOLD = 1000; 
+    const BURST_THRESHOLD = 4000; // Increased to 4 seconds to account for slower bursts and FAT32 timestamp resolution
 
     for (let i = 0; i < newItems.length; i++) {
         const current = newItems[i];
@@ -1396,9 +1397,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         let j = i + 1;
         while(j < newItems.length) {
             const next = newItems[j];
+            const prevInBurst = newItems[j - 1]; // Compare to the immediately preceding frame, not the first frame!
+            
             if (next.type === 'file' && next.fileType === 'image' && 
                 next.parentId === current.parentId && 
-                (next.dateTaken || 0) - (current.dateTaken || 0) < BURST_THRESHOLD) {
+                Math.abs((next.dateTaken || 0) - (prevInBurst.dateTaken || 0)) < BURST_THRESHOLD) {
                 
                 burstIds.push(next.id);
                 j++;
@@ -1616,6 +1619,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setItems(prev => [...prev, ...newItems]);
   };
 
+  const groupItems = (ids: string[]) => {
+      if (ids.length < 2) return;
+      const groupId = Math.random().toString(36).substr(2, 9);
+      const targetIds = new Set(ids);
+      
+      const itemsToGroup = items.filter(i => targetIds.has(i.id)).sort((a,b) => (a.dateTaken || 0) - (b.dateTaken || 0));
+      if (itemsToGroup.length === 0) return;
+      const topId = itemsToGroup[0].id;
+
+      setItems(prev => prev.map(i => {
+          if (targetIds.has(i.id)) {
+              const updated = { ...i, groupId, isStackTop: i.id === topId };
+              upsertItem(updated);
+              return updated;
+          }
+          return i;
+      }));
+      showToast(`Stacked ${ids.length} items together`, 'success');
+  };
+
   const bulkUpdateMetadata = (ids: string[], updates: Partial<FileSystemItem>) => {
       const targetIds = new Set(ids);
       const originalItems = items.filter(i => targetIds.has(i.id));
@@ -1809,6 +1832,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       bulkDeleteItems,
       moveItems,
       duplicateItems,
+      groupItems,
       updateItemMetadata,
       executeOrganizationPlan,
       analyzeVideoItem,

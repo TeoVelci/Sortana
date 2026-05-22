@@ -343,6 +343,7 @@ const Browse: React.FC = () => {
       retryUpload,
       moveItems,
       duplicateItems,
+      groupItems,
       formatSize,
       user,
       currentFolderId,
@@ -1381,9 +1382,19 @@ const Browse: React.FC = () => {
                   {selectedIds.size || 1} Selected
               </div>
               
-              {/* NEW: Compare Button (Visible only if 2+ items selected) */}
+              {/* NEW: Compare & Stack Buttons (Visible only if 2+ items selected) */}
               {selectedIds.size > 1 && (
                   <>
+                    <button 
+                        onClick={() => {
+                            groupItems(Array.from(selectedIds));
+                            setSelectedIds(new Set());
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-xl transition-colors whitespace-nowrap"
+                    >
+                        <span className="material-icons-outlined text-lg">layers</span>
+                        Stack
+                    </button>
                     <button 
                         onClick={handleStartComparison}
                         className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-50 dark:bg-primary/20 text-primary border border-primary/30 hover:bg-primary hover:text-white rounded-xl transition-colors whitespace-nowrap"
