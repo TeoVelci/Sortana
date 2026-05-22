@@ -9,45 +9,57 @@ export interface UploadResult {
 const BUCKET_NAME = 'sortana'; // Default bucket name
 
 /**
+ * Universal retry wrapper for network requests to handle browser tab suspension
+ * and temporary network drops.
+ */
+const withRetry = async <T>(operation: () => Promise<T>, maxRetries: number = 5): Promise<T> => {
+    let retries = maxRetries;
+    while (retries > 0) {
+        // Pause if strictly offline
+        while (!navigator.onLine) {
+            await new Promise(resolve => window.addEventListener('online', resolve, { once: true }));
+        }
+        
+        try {
+            return await operation();
+        } catch (err: any) {
+            retries--;
+            if (retries === 0) throw err;
+            console.warn(`Network operation failed, retrying... (${maxRetries - retries}/${maxRetries})`, err);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+    }
+    throw new Error("Unreachable");
+};
+
+/**
  * Generates a unique presigned URL for the file via the Supabase Edge Function.
  */
 export const getPresignedUrl = async (filename: string, filetype: string): Promise<UploadResult> => {
-  const { data, error } = await supabase.functions.invoke('get-aws-presigned-url', {
-    body: { filename, filetype }
+  return withRetry(async () => {
+      const { data, error } = await supabase.functions.invoke('get-aws-presigned-url', {
+        body: { filename, filetype }
+      });
+      if (error) throw error;
+      return data;
   });
-
-  if (error) throw error;
-  return data; // { url: string, key: string }
 };
 
 /**
  * Uploads a file directly to AWS S3 using the presigned URL.
  */
-export const uploadFileToS3 = async (file: File | Blob, url: string, retries = 3): Promise<void> => {
-  let lastError: any;
-
-  // Standard S3 PUT upload
-  for (let i = 0; i < retries; i++) {
-    // Pause if offline
-    while (!navigator.onLine) {
-       await new Promise(resolve => window.addEventListener('online', resolve, { once: true }));
-    }
-
-    try {
-      const response = await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file,
-      });
-
-      if (response.ok) return;
-      lastError = new Error(`S3 Upload failed: ${response.status} ${response.statusText}`);
-    } catch (error: any) {
-      lastError = error;
-    }
-    if (i < retries - 1) await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-  }
-  throw lastError;
+export const uploadFileToS3 = async (file: File | Blob, presignedUrl: string) => {
+    return withRetry(async () => {
+        const res = await fetch(presignedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': (file as File).type || 'application/octet-stream' },
+          body: file,
+        });
+        if (!res.ok) {
+          throw new Error(`Upload failed with status: ${res.status}`);
+        }
+        return true;
+    });
 };
 
 /**
@@ -114,10 +126,13 @@ export const multipartUploadFileToS3 = async (
   const totalParts = Math.ceil(file.size / CHUNK_SIZE);
   
   // 1. Create Multipart Upload
-  const { data: createData, error: createError } = await supabase.functions.invoke('get-aws-presigned-url', {
-    body: { action: 'createMultipart', filename, filetype: file.type || 'application/octet-stream' }
+  const createData = await withRetry(async () => {
+      const { data, error } = await supabase.functions.invoke('get-aws-presigned-url', {
+        body: { action: 'createMultipart', filename, filetype: file.type || 'application/octet-stream' }
+      });
+      if (error) throw error;
+      return data;
   });
-  if (createError) throw createError;
   const { uploadId, key } = createData;
 
   const uploadedParts: { ETag: string, PartNumber: number }[] = [];
@@ -125,19 +140,14 @@ export const multipartUploadFileToS3 = async (
   try {
     // 2. Upload chunk function
     const uploadChunk = async (partNumber: number, chunk: Blob) => {
-      const { data: signData, error: signError } = await supabase.functions.invoke('get-aws-presigned-url', {
-        body: { action: 'signPart', uploadId, partNumber, key }
-      });
-      if (signError) throw signError;
-      
-      let retries = 5;
-      while (retries > 0) {
-        // Pause if offline
-        while (!navigator.onLine) {
-           await new Promise(resolve => window.addEventListener('online', resolve, { once: true }));
-        }
-
-        try {
+      return withRetry(async () => {
+          // 2a. Get Presigned URL for Chunk
+          const { data: signData, error: signError } = await supabase.functions.invoke('get-aws-presigned-url', {
+            body: { action: 'signPart', uploadId, partNumber, key }
+          });
+          if (signError) throw signError;
+          
+          // 2b. Upload Chunk
           const res = await fetch(signData.url, {
             method: 'PUT',
             body: chunk,
@@ -145,15 +155,8 @@ export const multipartUploadFileToS3 = async (
           
           if (!res.ok) throw new Error(`Upload part ${partNumber} failed: ${res.status}`);
           
-          // Bypass client-side ETag validation due to AWS S3 CORS restrictions.
-          // The edge function will fetch the ETags directly via ListPartsCommand.
           return { PartNumber: partNumber };
-        } catch (err) {
-          retries--;
-          if (retries === 0) throw err;
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      }
+      });
     };
 
     // We can use a simple concurrency limiter
@@ -189,10 +192,12 @@ export const multipartUploadFileToS3 = async (
     uploadedParts.sort((a, b) => a.PartNumber - b.PartNumber);
 
     // 3. Complete Multipart
-    const { data: completeData, error: completeError } = await supabase.functions.invoke('get-aws-presigned-url', {
-      body: { action: 'completeMultipart', uploadId, parts: uploadedParts, key }
+    await withRetry(async () => {
+        const { error: completeError } = await supabase.functions.invoke('get-aws-presigned-url', {
+          body: { action: 'completeMultipart', uploadId, key }
+        });
+        if (completeError) throw completeError;
     });
-    if (completeError) throw completeError;
 
     return { url: '', key };
 
