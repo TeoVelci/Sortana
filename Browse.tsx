@@ -63,7 +63,7 @@ interface CellData {
     onItemClick: (e: ReactMouseEvent, item: FileSystemItem) => void;
     onItemDoubleClick: (e: ReactMouseEvent, item: FileSystemItem) => void;
     onDragStart: (e: React.DragEvent, item: FileSystemItem) => void;
-    onDropOnFolder?: (e: React.DragEvent, targetFolder: FileSystemItem) => void;
+    onDropOnFolder?: (e: React.DragEvent, targetFolderId: string | null) => void;
     onAnalyzeVideo: (id: string) => void;
     handleTagClick: (tag: string) => void;
     userPlan: string;
@@ -134,7 +134,7 @@ const ItemCell: React.FC<{ item: FileSystemItem, data: any }> = ({ item, data })
             draggable
             onDragStart={(e) => onDragStart(e, item)}
             onDragOver={(e) => { if (item.type === 'folder') e.preventDefault(); }}
-            onDrop={(e) => { if (item.type === 'folder' && onDropOnFolder) onDropOnFolder(e, item); }}
+            onDrop={(e) => { if (item.type === 'folder' && onDropOnFolder) onDropOnFolder(e, item.id); }}
         >
             {/* STACK EFFECT UNDERLAY */}
             {isStack && (
@@ -615,28 +615,34 @@ const Browse: React.FC = () => {
       e.dataTransfer.effectAllowed = 'move';
       
       const dragPreview = document.createElement('div');
-      dragPreview.innerText = item.name;
-      dragPreview.style.background = '#333';
+      dragPreview.innerText = `Move: ${item.name}`;
+      dragPreview.style.background = '#4F46E5'; // Primary color
       dragPreview.style.color = 'white';
-      dragPreview.style.padding = '8px';
-      dragPreview.style.borderRadius = '4px';
+      dragPreview.style.padding = '8px 16px';
+      dragPreview.style.borderRadius = '8px';
+      dragPreview.style.fontWeight = 'bold';
+      dragPreview.style.maxWidth = '250px';
+      dragPreview.style.overflow = 'hidden';
+      dragPreview.style.textOverflow = 'ellipsis';
+      dragPreview.style.whiteSpace = 'nowrap';
+      dragPreview.style.boxShadow = '0 10px 15px -3px rgb(0 0 0 / 0.5)';
       document.body.appendChild(dragPreview);
-      e.dataTransfer.setDragImage(dragPreview, 0, 0);
+      e.dataTransfer.setDragImage(dragPreview, 10, 10);
       setTimeout(() => document.body.removeChild(dragPreview), 0);
   }, []);
 
-  const handleDropOnFolder = useCallback((e: React.DragEvent, targetFolder: FileSystemItem) => {
+  const handleDropOnFolder = useCallback((e: React.DragEvent, targetFolderId: string | null) => {
       e.preventDefault();
       e.stopPropagation();
       const draggedItemId = e.dataTransfer.getData('application/sortana-item-id');
-      if (draggedItemId && draggedItemId !== targetFolder.id) {
+      if (draggedItemId && draggedItemId !== targetFolderId) {
           // If we have multiple selected items and dragging one of them, move all selected
           if (selectedIds.has(draggedItemId)) {
-              moveItems(Array.from(selectedIds), targetFolder.id);
+              moveItems(Array.from(selectedIds), targetFolderId);
               setSelectedIds(new Set()); // clear selection
           } else {
               // Otherwise just move the one being dragged
-              moveItems([draggedItemId], targetFolder.id);
+              moveItems([draggedItemId], targetFolderId);
           }
       }
   }, [selectedIds, setSelectedIds, moveItems]);
@@ -947,7 +953,9 @@ const Browse: React.FC = () => {
                 {idx > 0 && <span className="material-icons-outlined text-[10px]">chevron_right</span>}
                 <button 
                   onClick={() => navigateTo(crumb.id)}
-                  className={`cursor-pointer whitespace-nowrap ${idx === breadcrumbs.length - 1 ? 'text-primary font-medium' : 'hover:text-primary'}`}
+                  onDragOver={(e) => { e.preventDefault(); }}
+                  onDrop={(e) => handleDropOnFolder(e, crumb.id)}
+                  className={`cursor-pointer whitespace-nowrap ${idx === breadcrumbs.length - 1 ? 'text-primary font-medium' : 'hover:text-primary'} px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-700`}
                 >
                   {crumb.name}
                 </button>
