@@ -475,8 +475,12 @@ const extractDetailedMetadata = async (file) => {
     } catch (e) {}
 
     // Fallbacks
-    if (!result.make && file.name.toUpperCase().startsWith('DJI_')) {
+    const isUnknownMake = !result.make || result.make.toLowerCase().includes('unknown') || result.make.trim() === '';
+    if (isUnknownMake && file.name.toUpperCase().startsWith('DJI_')) {
         result.make = 'DJI';
+        if (!result.model || result.model.toLowerCase().includes('unknown')) {
+            result.model = 'Drone';
+        }
     }
 
     applyAppleFallback();
@@ -1009,7 +1013,7 @@ export const getFriendlyCameraName = (make: string | null, model: string | null)
         };
         const upper = name.toUpperCase().replace('DJI ', '').trim();
         if (djiMappings[upper]) return djiMappings[upper];
-        if (!name || name === brand) return 'DJI Drone';
+        if (!name || name === brand || name.toLowerCase().includes('unknown') || name === 'Drone') return 'DJI Drone';
         return `DJI ${name.replace('DJI ', '')}`;
     }
 
