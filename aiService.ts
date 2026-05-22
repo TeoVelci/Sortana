@@ -372,7 +372,7 @@ const extractDetailedMetadata = async (file) => {
     }
 
     try {
-        const arrayBuffer = await file.slice(0, 2 * 1024 * 1024).arrayBuffer();
+        const arrayBuffer = await file.slice(0, 10 * 1024 * 1024).arrayBuffer(); // Read 10MB to handle large RAW files
         const view = new DataView(arrayBuffer);
         const length = arrayBuffer.byteLength;
         let tiffStart = 0;
@@ -490,13 +490,43 @@ const extractPreviewFromRaw = async (file) => {
                         // We'll read a larger slice to find the end
                         const searchSlice = file.slice(absoluteStart, absoluteStart + 15 * 1024 * 1024); // Up to 15MB for a single preview
                         const searchBuffer = await searchSlice.arrayBuffer();
-                        const searchBytes = new Uint8Array(searchBuffer);
-                        
+                        // Robust JPEG marker parser to skip EXIF thumbnails and find the true End of Image
                         let end = -1;
-                        for (let j = 0; j < searchBytes.length - 1; j++) {
-                            if (searchBytes[j] === 0xFF && searchBytes[j+1] === 0xD9) {
-                                end = j + 2;
-                                break;
+                        let sOffset = 2; // skip FF D8
+                        while (sOffset < searchBytes.length - 1) {
+                            if (searchBytes[sOffset] === 0xFF) {
+                                let marker = searchBytes[sOffset + 1];
+                                if (marker === 0xD9) { // End of Image
+                                    end = sOffset + 2;
+                                    break;
+                                }
+                                if (marker === 0xDA) { // Start of Scan (Image Data)
+                                    // Image data follows, scan for true FF D9
+                                    for (let k = sOffset + 2; k < searchBytes.length - 1; k++) {
+                                        if (searchBytes[k] === 0xFF && searchBytes[k+1] === 0xD9) {
+                                            end = k + 2;
+                                            break;
+                                        }
+                                    }
+                                    break;
+                                }
+                                if (marker >= 0xD0 && marker <= 0xD7) { // Restart markers
+                                    sOffset += 2;
+                                    continue;
+                                }
+                                if (marker === 0x00 || marker === 0xFF) { // Escaped FF or padding
+                                    sOffset += 1;
+                                    continue;
+                                }
+                                // Other markers have a 2-byte length
+                                if (sOffset + 3 < searchBytes.length) {
+                                    let markerLen = (searchBytes[sOffset + 2] << 8) | searchBytes[sOffset + 3];
+                                    sOffset += 2 + markerLen;
+                                } else {
+                                    break;
+                                }
+                            } else {
+                                sOffset++;
                             }
                         }
 
@@ -941,6 +971,24 @@ export const getFriendlyCameraName = (make: string | null, model: string | null)
         return `Sony ${name.replace(/Sony/gi, '').trim()}`.replace('Sony Sony', 'Sony').trim();
     }
     
+    // DJI Specific Mapping
+    if (brand.toLowerCase().includes('dji') || name.startsWith('FC')) {
+        const djiMappings: Record<string, string> = {
+            'FC3411': 'DJI Air 2S',
+            'FC3170': 'DJI Mavic Air 2',
+            'FC7303': 'DJI Mavic Mini',
+            'FC3582': 'DJI Mini 3 Pro',
+            'FC220': 'DJI Mavic Pro',
+            'L1D-20C': 'DJI Mavic 2 Pro',
+            'FC2204': 'DJI Mavic 2 Zoom',
+            'FC8282': 'DJI Phantom 4 Pro'
+        };
+        const upper = name.toUpperCase();
+        if (djiMappings[upper]) return djiMappings[upper];
+        if (!name || name === brand) return 'DJI Drone';
+        return `DJI ${name.replace('DJI ', '')}`;
+    }
+
     // Canon Specific Mapping
     if (brand.toLowerCase().includes('canon')) {
         if (!name) return 'Canon Camera';
