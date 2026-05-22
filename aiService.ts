@@ -297,6 +297,21 @@ const extractMp4Metadata = async (file) => {
             scanForSignatures(extractStrings(footerBuffer));
         }
 
+        // Fast-track exact model extraction for GoPro and DJI videos
+        if (result.rawMetadata) {
+            const goproMatch = result.rawMetadata.match(/(GoPro HERO[0-9]+ (Black|Silver|White)?)/i) || result.rawMetadata.match(/(GoPro Max)/i);
+            if (goproMatch) {
+                result.make = 'GoPro';
+                result.model = cleanString(goproMatch[1]);
+            } else {
+                const djiMatch = result.rawMetadata.match(/(FC[0-9]{4})/i) || result.rawMetadata.match(/(Osmo Action [0-9]+)/i);
+                if (djiMatch) {
+                    result.make = 'DJI';
+                    result.model = cleanString(djiMatch[1]);
+                }
+            }
+        }
+
     } catch (e) {
         console.error("MP4 Parser Error:", e);
     }
@@ -586,7 +601,7 @@ const extractPreviewFromRaw = async (file) => {
                             }
                         }
 
-                        if (end > 2000) { // Minimum size for a valid preview
+                        if (end > 500) { // Minimum size for a valid preview
                             candidates.push({ start: absoluteStart, size: end, blob: new Blob([searchBytes.slice(0, end)], { type: 'image/jpeg' }) });
                             // Skip ahead in the outer loop
                             i += end; 
@@ -604,6 +619,12 @@ const extractPreviewFromRaw = async (file) => {
         for (const c of candidates) {
             if (await isValidImageBlob(c.blob)) return c.blob;
         }
+
+        // If createImageBitmap failed for all, but we found valid JPEG markers,
+        // return the largest one as a last resort, since browser <img> tags are often
+        // more forgiving than createImageBitmap!
+        if (candidates.length > 0) return candidates[0].blob;
+
     } catch (e) {
         console.warn("Worker: RAW extraction failed", e);
     }
