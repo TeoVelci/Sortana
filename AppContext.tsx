@@ -121,6 +121,8 @@ interface AppContextType {
   addGeneratedFile: (file: File, parentId: string | null, tags: string[]) => Promise<void>;
   renameItem: (id: string, newName: string) => void;
   deleteItem: (id: string) => void;
+  bulkDeleteItems: (ids: string[]) => void;
+  moveItems: (ids: string[], targetFolderId: string | null) => void;
   updateItemMetadata: (id: string, updates: Partial<FileSystemItem>) => void;
   executeOrganizationPlan: (plan: FolderPlan[], targetParentId?: string | null) => void;
   analyzeVideoItem: (id: string, fileInfo?: { name: string, type: string }, rawMetadata?: string) => Promise<void>;
@@ -131,7 +133,6 @@ interface AppContextType {
   resetFilters: () => void;
 
   // Bulk Actions
-  bulkDeleteItems: (ids: string[]) => void;
   bulkUpdateMetadata: (ids: string[], updates: Partial<FileSystemItem>) => void;
   bulkAddTags: (ids: string[], tag: string) => void;
   
@@ -1566,6 +1567,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
+  const moveItems = (ids: string[], targetFolderId: string | null) => {
+      const targetIds = new Set(ids);
+      setItems(prev => prev.map(i => {
+          if (targetIds.has(i.id)) {
+              const updated = { ...i, parentId: targetFolderId };
+              upsertItem(updated); // Persist
+              return updated;
+          }
+          return i;
+      }));
+      showToast(`Moved ${ids.length} item(s)`, 'success');
+  };
+
   const bulkUpdateMetadata = (ids: string[], updates: Partial<FileSystemItem>) => {
       const targetIds = new Set(ids);
       const originalItems = items.filter(i => targetIds.has(i.id));
@@ -1756,13 +1770,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addGeneratedFile,
       renameItem,
       deleteItem,
+      bulkDeleteItems,
+      moveItems,
       updateItemMetadata,
       executeOrganizationPlan,
       analyzeVideoItem,
       generateVideoProxy,
       setViewState,
       resetFilters,
-      bulkDeleteItems,
       bulkUpdateMetadata,
       bulkAddTags,
       undo,

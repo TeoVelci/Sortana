@@ -63,6 +63,7 @@ interface CellData {
     onItemClick: (e: ReactMouseEvent, item: FileSystemItem) => void;
     onItemDoubleClick: (e: ReactMouseEvent, item: FileSystemItem) => void;
     onDragStart: (e: React.DragEvent, item: FileSystemItem) => void;
+    onDropOnFolder?: (e: React.DragEvent, targetFolder: FileSystemItem) => void;
     onAnalyzeVideo: (id: string) => void;
     handleTagClick: (tag: string) => void;
     userPlan: string;
@@ -105,6 +106,7 @@ const ItemCell: React.FC<{ item: FileSystemItem, data: any }> = ({ item, data })
         onItemClick, 
         onItemDoubleClick, 
         onDragStart,
+        onDropOnFolder,
         onAnalyzeVideo,
         handleTagClick,
         userPlan,
@@ -131,6 +133,8 @@ const ItemCell: React.FC<{ item: FileSystemItem, data: any }> = ({ item, data })
             onDoubleClick={(e) => { e.stopPropagation(); onItemDoubleClick(e, item); }}
             draggable
             onDragStart={(e) => onDragStart(e, item)}
+            onDragOver={(e) => { if (item.type === 'folder') e.preventDefault(); }}
+            onDrop={(e) => { if (item.type === 'folder' && onDropOnFolder) onDropOnFolder(e, item); }}
         >
             {/* STACK EFFECT UNDERLAY */}
             {isStack && (
@@ -337,6 +341,7 @@ const Browse: React.FC = () => {
       bulkAddTags, 
       addGeneratedFile, 
       retryUpload,
+      moveItems,
       formatSize,
       user,
       currentFolderId,
@@ -607,7 +612,7 @@ const Browse: React.FC = () => {
   const handleDragStart = useCallback((e: React.DragEvent, item: FileSystemItem) => {
       // Set Data Transfer for Copilot or other drop targets
       e.dataTransfer.setData('application/sortana-item-id', item.id);
-      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.effectAllowed = 'move';
       
       const dragPreview = document.createElement('div');
       dragPreview.innerText = item.name;
@@ -619,6 +624,22 @@ const Browse: React.FC = () => {
       e.dataTransfer.setDragImage(dragPreview, 0, 0);
       setTimeout(() => document.body.removeChild(dragPreview), 0);
   }, []);
+
+  const handleDropOnFolder = useCallback((e: React.DragEvent, targetFolder: FileSystemItem) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const draggedItemId = e.dataTransfer.getData('application/sortana-item-id');
+      if (draggedItemId && draggedItemId !== targetFolder.id) {
+          // If we have multiple selected items and dragging one of them, move all selected
+          if (selectedIds.has(draggedItemId)) {
+              moveItems(Array.from(selectedIds), targetFolder.id);
+              setSelectedIds(new Set()); // clear selection
+          } else {
+              // Otherwise just move the one being dragged
+              moveItems([draggedItemId], targetFolder.id);
+          }
+      }
+  }, [selectedIds, setSelectedIds, moveItems]);
 
   // --- Handlers: Bulk Actions ---
 
@@ -1090,6 +1111,7 @@ const Browse: React.FC = () => {
                                 onItemClick: handleItemClick,
                                 onItemDoubleClick: handleItemDoubleClick,
                                 onDragStart: handleDragStart,
+                                onDropOnFolder: handleDropOnFolder,
                                 onAnalyzeVideo: handleAnalyzeVideo,
                                 handleTagClick: handleTagClick,
                                 userPlan: user.plan,
