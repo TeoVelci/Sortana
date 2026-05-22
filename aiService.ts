@@ -1109,7 +1109,7 @@ export const processFileForDisplay = async (file: File, maxSize: number = 2560):
     }
     
     // 3. Handle RAW formats that browsers can't render
-    const isRaw = file.type.includes('raw') || file.name.match(/\.(arw|cr2|cr3|nef|dng|orf|rw2|raf)$/i);
+    const isRaw = file.type.includes('raw') || file.name.match(/\.(arw|cr2|cr3|nef|dng|orf|rw2|raf|gpr)$/i);
     if (!isBrowserRenderable(file) && isRaw && !isVideo) {
          try {
              // Offload heavy binary scanning to worker
@@ -1145,7 +1145,7 @@ export const prepareImageForAI = async (file?: File, preProcessedBlob?: Blob): P
     let sourceBlob: Blob | undefined = preProcessedBlob || file;
     
     if (!sourceBlob) throw new Error("No source image provided for AI analysis");
-    const isRaw = file && (file.type.includes('raw') || file.name.match(/\.(arw|cr2|cr3|nef|dng|orf|rw2|raf)$/i));
+    const isRaw = file && (file.type.includes('raw') || file.name.match(/\.(arw|cr2|cr3|nef|dng|orf|rw2|raf|gpr)$/i));
 
     // If we don't have a pre-processed blob (e.g. from display logic), ensuring we have a readable image
     if (!preProcessedBlob && file && !isBrowserRenderable(file)) {

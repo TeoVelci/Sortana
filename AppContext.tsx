@@ -1174,7 +1174,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
           // Generate high-res preview (2560px)
           const processed = await processFileForDisplay(f, 2560);
-          const isRaw = f.type.includes('raw') || f.name.toLowerCase().match(/\.(arw|cr2|cr3|nef|dng|orf|rw2|raf)$/i);
+          const isRaw = f.type.includes('raw') || f.name.toLowerCase().match(/\.(arw|cr2|cr3|nef|dng|orf|rw2|raf|gpr)$/i);
           const isVideoFile = f.type.startsWith('video/') || f.name.match(/\.(mp4|mov|m4v)$/i);
           
           if (processed) {
