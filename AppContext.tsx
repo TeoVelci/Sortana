@@ -1218,10 +1218,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           // Ultimate Fallback for DJI files to prevent Unknown Camera even if Worker fails
           const isUnknownMake = !make || make.toLowerCase().includes('unknown') || make.trim() === '';
-          if (isUnknownMake && f.name.toUpperCase().startsWith('DJI_')) {
-              make = 'DJI';
-              if (!model || model.toLowerCase().includes('unknown')) {
-                  model = 'Drone';
+          if (isUnknownMake) {
+              const upperName = f.name.toUpperCase();
+              if (upperName.startsWith('DJI_')) {
+                  make = 'DJI';
+                  if (!model || model.toLowerCase().includes('unknown')) {
+                      model = 'Drone';
+                  }
+              } else if (upperName.startsWith('GOPR') || upperName.startsWith('GX0') || upperName.startsWith('GH0') || upperName.startsWith('GL0')) {
+                  make = 'GoPro';
+                  if (!model || model.toLowerCase().includes('unknown')) {
+                      model = 'Camera';
+                  }
               }
           }
 

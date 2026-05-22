@@ -299,10 +299,10 @@ const extractMp4Metadata = async (file) => {
 
         // Fast-track exact model extraction for GoPro and DJI videos
         if (result.rawMetadata) {
-            const goproMatch = result.rawMetadata.match(/(GoPro HERO[0-9]+ (Black|Silver|White)?)/i) || result.rawMetadata.match(/(GoPro Max)/i);
-            if (goproMatch) {
+            if (result.rawMetadata.match(/(GoPro|HERO[0-9]+)/i)) {
                 result.make = 'GoPro';
-                result.model = cleanString(goproMatch[1]);
+                const modelMatch = result.rawMetadata.match(/(HERO[ ?0-9]+( (Black|Silver|White))?)/i);
+                result.model = modelMatch ? cleanString(modelMatch[1].replace(' ', '')) : 'Camera';
             } else {
                 const djiMatch = result.rawMetadata.match(/(FC[0-9]{4})/i) || result.rawMetadata.match(/(Osmo Action [0-9]+)/i);
                 if (djiMatch) {
@@ -601,7 +601,7 @@ const extractPreviewFromRaw = async (file) => {
                             }
                         }
 
-                        if (end > 500) { // Minimum size for a valid preview
+                        if (end > 2000) { // Minimum size for a valid preview
                             candidates.push({ start: absoluteStart, size: end, blob: new Blob([searchBytes.slice(0, end)], { type: 'image/jpeg' }) });
                             // Skip ahead in the outer loop
                             i += end; 
@@ -620,10 +620,7 @@ const extractPreviewFromRaw = async (file) => {
             if (await isValidImageBlob(c.blob)) return c.blob;
         }
 
-        // If createImageBitmap failed for all, but we found valid JPEG markers,
-        // return the largest one as a last resort, since browser <img> tags are often
-        // more forgiving than createImageBitmap!
-        if (candidates.length > 0) return candidates[0].blob;
+
 
     } catch (e) {
         console.warn("Worker: RAW extraction failed", e);
