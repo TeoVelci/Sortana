@@ -123,6 +123,7 @@ interface AppContextType {
   deleteItem: (id: string) => void;
   bulkDeleteItems: (ids: string[]) => void;
   moveItems: (ids: string[], targetFolderId: string | null) => void;
+  duplicateItems: (ids: string[], targetFolderId: string | null) => void;
   updateItemMetadata: (id: string, updates: Partial<FileSystemItem>) => void;
   executeOrganizationPlan: (plan: FolderPlan[], targetParentId?: string | null) => void;
   analyzeVideoItem: (id: string, fileInfo?: { name: string, type: string }, rawMetadata?: string) => Promise<void>;
@@ -1580,6 +1581,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       showToast(`Moved ${ids.length} item(s)`, 'success');
   };
 
+  const duplicateItems = (ids: string[], targetFolderId: string | null) => {
+      const newItems: FileSystemItem[] = [];
+      const idMap = new Map<string, string>(); // Old -> New
+
+      const processDuplication = (itemToCopy: FileSystemItem, parentId: string | null) => {
+          const newId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+          idMap.set(itemToCopy.id, newId);
+          
+          const newItem = {
+              ...itemToCopy,
+              id: newId,
+              name: itemToCopy.name + " copy",
+              parentId: parentId,
+              dateAdded: Date.now()
+          };
+          newItems.push(newItem);
+          upsertItem(newItem); // Persist immediately
+
+          // If folder, duplicate children too
+          if (itemToCopy.type === 'folder') {
+              const children = items.filter(c => c.parentId === itemToCopy.id);
+              children.forEach(c => processDuplication(c, newId));
+          }
+      };
+
+      ids.forEach(id => {
+          const item = items.find(i => i.id === id);
+          if (item) {
+              processDuplication(item, targetFolderId);
+          }
+      });
+
+      setItems(prev => [...prev, ...newItems]);
+  };
+
   const bulkUpdateMetadata = (ids: string[], updates: Partial<FileSystemItem>) => {
       const targetIds = new Set(ids);
       const originalItems = items.filter(i => targetIds.has(i.id));
@@ -1772,6 +1808,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       deleteItem,
       bulkDeleteItems,
       moveItems,
+      duplicateItems,
       updateItemMetadata,
       executeOrganizationPlan,
       analyzeVideoItem,

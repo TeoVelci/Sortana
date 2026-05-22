@@ -381,10 +381,18 @@ const Browse: React.FC = () => {
   const selectedIdsRef = useRef(selectedIds);
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
 
+  // Clipboard State for Copy/Paste Duplication
+  const [clipboardIds, setClipboardIds] = useState<Set<string>>(new Set());
+  const clipboardIdsRef = useRef(clipboardIds);
+
   // Sync Ref with State
   useEffect(() => {
       selectedIdsRef.current = selectedIds;
   }, [selectedIds]);
+
+  useEffect(() => {
+      clipboardIdsRef.current = clipboardIds;
+  }, [clipboardIds]);
 
   // Inspector State - DEFAULT CLOSED to keep UI clean
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
@@ -687,6 +695,24 @@ const Browse: React.FC = () => {
           // Check Ref directly
           if (selectedIdsRef.current.size > 0) {
               performDelete(e);
+          }
+      }
+
+      // Copy (Cmd+C / Ctrl+C)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
+          if (selectedIdsRef.current.size > 0) {
+              setClipboardIds(selectedIdsRef.current);
+              showToast(`Copied ${selectedIdsRef.current.size} item(s)`, 'info');
+              e.preventDefault();
+          }
+      }
+
+      // Paste (Cmd+V / Ctrl+V)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v') {
+          if (clipboardIdsRef.current.size > 0) {
+              duplicateItems(Array.from(clipboardIdsRef.current), currentFolderId);
+              showToast(`Pasted ${clipboardIdsRef.current.size} item(s)`, 'success');
+              e.preventDefault();
           }
       }
     };
@@ -1388,6 +1414,17 @@ const Browse: React.FC = () => {
               >
                   <span className="material-icons-outlined text-lg">delete</span>
                   Delete
+              </button>
+              <button 
+                  onClick={(e) => {
+                      duplicateItems(Array.from(selectedIds), currentFolderId);
+                      setSelectedIds(new Set());
+                      showToast(`Duplicated ${selectedIds.size} item(s)`, 'success');
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-xl transition-colors whitespace-nowrap"
+              >
+                  <span className="material-icons-outlined text-lg">content_copy</span>
+                  Duplicate
               </button>
               <div className="w-px h-6 bg-gray-200 dark:bg-white/10"></div>
               <button onClick={() => setSelectedIds(new Set())} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg transition-colors">
