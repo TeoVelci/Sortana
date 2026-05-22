@@ -12,8 +12,9 @@ const BUCKET_NAME = 'sortana'; // Default bucket name
  * Universal retry wrapper for network requests to handle browser tab suspension
  * and temporary network drops.
  */
-const withRetry = async <T>(operation: () => Promise<T>, maxRetries: number = 5): Promise<T> => {
+const withRetry = async <T>(operation: () => Promise<T>, maxRetries: number = 12): Promise<T> => {
     let retries = maxRetries;
+    let delay = 2000;
     while (retries > 0) {
         // Pause if strictly offline
         while (!navigator.onLine) {
@@ -25,8 +26,9 @@ const withRetry = async <T>(operation: () => Promise<T>, maxRetries: number = 5)
         } catch (err: any) {
             retries--;
             if (retries === 0) throw err;
-            console.warn(`Network operation failed, retrying... (${maxRetries - retries}/${maxRetries})`, err);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            console.warn(`Network operation failed, retrying in ${delay}ms... (${maxRetries - retries}/${maxRetries})`, err);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay = Math.min(delay * 1.5, 10000); // Caps at 10s per retry
         }
     }
     throw new Error("Unreachable");
