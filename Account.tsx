@@ -106,12 +106,28 @@ const Account: React.FC = () => {
                       value={user.plan}
                       onChange={(e) => updateUser({ plan: e.target.value })}
                       className="bg-white dark:bg-dark-800 border border-gray-300 dark:border-dark-600 rounded-lg text-sm px-3 py-2 text-gray-900 dark:text-white outline-none focus:ring-1 focus:ring-yellow-500"
-                  >
                       <option value="Free">Free</option>
                       <option value="Basic">Basic</option>
                       <option value="Pro">Pro</option>
                       <option value="Studio">Studio</option>
                   </select>
+              </div>
+              
+              <div className="flex items-center gap-4 bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-200 dark:border-red-700/30 mt-4">
+                  <i className="fa-solid fa-rotate-left text-red-600 dark:text-red-500"></i>
+                  <div className="flex-1">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">Reset Onboarding Tours</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Clear localStorage to replay all UI tours.</p>
+                  </div>
+                  <button 
+                      onClick={() => {
+                          localStorage.removeItem('sortana_tours');
+                          showToast('Tours reset! Refresh the page to replay.', 'info');
+                      }}
+                      className="bg-white dark:bg-dark-800 border border-gray-300 dark:border-dark-600 rounded-lg text-sm font-medium px-4 py-2 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-dark-700 shadow-sm transition-colors"
+                  >
+                      Reset
+                  </button>
               </div>
           </div>
         </div>
