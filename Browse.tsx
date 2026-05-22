@@ -530,6 +530,20 @@ const Browse: React.FC = () => {
     }
     
     return inFolder && (item.type === 'folder' || matchesFilter);
+  }).sort((a, b) => {
+      // 1. Folders first
+      if (a.type === 'folder' && b.type !== 'folder') return -1;
+      if (a.type !== 'folder' && b.type === 'folder') return 1;
+      
+      // 2. Stacks first (if both are files)
+      const aIsStack = Boolean(a.groupId && a.isStackTop);
+      const bIsStack = Boolean(b.groupId && b.isStackTop);
+      
+      if (aIsStack && !bIsStack) return -1;
+      if (!aIsStack && bIsStack) return 1;
+      
+      // 3. Keep original relative order (fallback to dateTaken/dateAdded descending)
+      return (b.dateTaken || b.dateAdded || 0) - (a.dateTaken || a.dateAdded || 0);
   });
 
   // Items eligible for Culling (Images only)

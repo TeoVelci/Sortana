@@ -102,7 +102,7 @@ const TOURS: Record<TourId, TourStep[]> = {
     {
       targetId: 'browse-action-bar',
       title: 'Bulk Actions Menu',
-      content: 'When you select files, this menu appears. Use it to mass-delete, apply star ratings, add text tags, or compare images side-by-side!',
+      content: 'When you select files, this menu appears. Use it to manually Stack/Unstack burst shots, mass-delete, apply ratings, or compare images!',
     },
     {
       targetId: 'browse-stacking',
