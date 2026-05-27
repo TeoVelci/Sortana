@@ -329,37 +329,51 @@ export const TourProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
 
             // 4. Smart Tooltip Positioning
-            // Determine quadrant
-            const spaceTop = rect.top;
-            const spaceBottom = window.innerHeight - rect.bottom;
-            const spaceLeft = rect.left;
-            const spaceRight = window.innerWidth - rect.right;
-
-            const tooltipWidth = 320;
+            const tooltipWidth = Math.min(320, window.innerWidth - 32);
             const tooltipHeight = 200; // approx
             const gap = 20;
 
             let top: number;
             let left: number;
             const transform = '';
+            
+            const isMobile = window.innerWidth < 768;
 
-            // Prefer Bottom, then Top, then Right, then Left
-            if (spaceBottom > tooltipHeight + gap) {
-                // Place Bottom
-                top = rect.bottom + gap + padding;
-                left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
-            } else if (spaceTop > tooltipHeight + gap) {
-                // Place Top
-                top = rect.top - gap - padding - 180; // approximate height adjustment
-                left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
-            } else if (spaceRight > tooltipWidth + gap) {
-                // Place Right
-                top = rect.top + (rect.height / 2) - 100;
-                left = rect.right + gap + padding;
+            if (isMobile) {
+                // On mobile, dock to top or bottom to avoid blocking the center content
+                if (rect.top + rect.height / 2 > window.innerHeight / 2) {
+                    // Target is in lower half, put tooltip near top
+                    top = 80;
+                } else {
+                    // Target is in upper half (or very large), put tooltip near bottom
+                    top = window.innerHeight - tooltipHeight - gap;
+                }
+                left = (window.innerWidth - tooltipWidth) / 2;
             } else {
-                // Place Left
-                top = rect.top + (rect.height / 2) - 100;
-                left = rect.left - gap - padding - tooltipWidth;
+                // Determine quadrant for desktop
+                const spaceTop = rect.top;
+                const spaceBottom = window.innerHeight - rect.bottom;
+                const spaceLeft = rect.left;
+                const spaceRight = window.innerWidth - rect.right;
+
+                // Prefer Bottom, then Top, then Right, then Left
+                if (spaceBottom > tooltipHeight + gap) {
+                    // Place Bottom
+                    top = rect.bottom + gap + padding;
+                    left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+                } else if (spaceTop > tooltipHeight + gap) {
+                    // Place Top
+                    top = rect.top - gap - padding - 180; // approximate height adjustment
+                    left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+                } else if (spaceRight > tooltipWidth + gap) {
+                    // Place Right
+                    top = rect.top + (rect.height / 2) - 100;
+                    left = rect.right + gap + padding;
+                } else {
+                    // Place Left
+                    top = rect.top + (rect.height / 2) - 100;
+                    left = rect.left - gap - padding - tooltipWidth;
+                }
             }
 
             // Screen Boundaries
@@ -498,7 +512,7 @@ export const TourProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               {/* 2. The FLOATING TOOLTIP */}
               {/* Positioned absolutely, tethered to the spotlight via JS calculation */}
               <div 
-                  className={`absolute w-[320px] bg-white dark:bg-dark-800 rounded-2xl p-6 shadow-2xl border border-white/10 flex flex-col gap-4 pointer-events-auto transition-all duration-300 z-20 ${isTooltipVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-4 scale-95'}`}
+                  className={`absolute w-[calc(100vw-32px)] max-w-[320px] bg-white dark:bg-dark-800 rounded-2xl p-6 shadow-2xl border border-white/10 flex flex-col gap-4 pointer-events-auto transition-all duration-300 z-20 ${isTooltipVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-4 scale-95'}`}
                   style={tooltipStyle}
               >
                   <div className="flex justify-between items-start">
