@@ -431,6 +431,7 @@ const extractDetailedMetadata = async (file) => {
                 return str.trim();
             }
             if (type === 3) return view.getUint16(offset + 8, isLittleEndian);
+            if (type === 4) return view.getUint32(offset + 8, isLittleEndian);
             return null;
         };
         const parseIFD = (offset) => {
@@ -457,6 +458,12 @@ const extractDetailedMetadata = async (file) => {
                         const parsed = parseExifDate(val);
                         if (parsed) result.dateTaken = parsed;
                     }
+                } else if (tag === 0x0111 || tag === 0x0201) { // StripOffsets or JPEGInterchangeFormat
+                    const val = readTagValue(entryOffset, type, count);
+                    if (typeof val === 'number') result.previewOffset = val;
+                } else if (tag === 0x0117 || tag === 0x0202) { // StripByteCounts or JPEGInterchangeFormatLength
+                    const val = readTagValue(entryOffset, type, count);
+                    if (typeof val === 'number') result.previewLength = val;
                 } else if (tag === 0x8769) {
                     const exifOffset = view.getUint32(entryOffset + 8, isLittleEndian);
                     parseIFD(exifOffset);
@@ -533,6 +540,17 @@ const extractDetailedMetadata = async (file) => {
 
 const extractPreviewFromRaw = async (file) => {
     try {
+        // Step 1: See if EXIF gave us the exact offset and length of the JPEG thumbnail
+        try {
+            const meta = await extractMetadata(file);
+            if (meta && meta.previewOffset && meta.previewLength && meta.previewLength > 1000) {
+                const previewSlice = file.slice(meta.previewOffset, meta.previewOffset + meta.previewLength);
+                const blob = new Blob([await previewSlice.arrayBuffer()], { type: 'image/jpeg' });
+                // We don't have isValidImageBlob inside worker, but we can assume EXIF offset is correct
+                return blob;
+            }
+        } catch (e) { }
+
         const fileSize = file.size;
         const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
         const OVERLAP = 1024; // 1KB overlap
@@ -1075,6 +1093,19 @@ export const getFriendlyCameraName = (make: string | null, model: string | null)
         return `Nikon ${name.replace('NIKON ', '').replace('Nikon ', '')}`;
     }
 
+    // GoPro Specific Mapping
+    if (brand.toLowerCase().includes('gopro')) {
+        const upper = name.toUpperCase();
+        if (upper.includes('HERO12') || upper.includes('HERO 12')) return 'GoPro HERO12 Black';
+        if (upper.includes('HERO11') || upper.includes('HERO 11')) return 'GoPro HERO11 Black';
+        if (upper.includes('HERO10') || upper.includes('HERO 10')) return 'GoPro HERO10 Black';
+        if (upper.includes('HERO9') || upper.includes('HERO 9')) return 'GoPro HERO9 Black';
+        if (upper.includes('HERO8') || upper.includes('HERO 8')) return 'GoPro HERO8 Black';
+        if (upper.includes('MAX')) return 'GoPro MAX';
+        
+        return `GoPro ${name.replace(/GoPro/gi, '').trim()}`;
+    }
+
     // Default
     if (!brand && name) return name;
     if (brand && !name) return `${brand} Camera`;
@@ -1167,7 +1198,7 @@ export const prepareImageForAI = async (file?: File, preProcessedBlob?: Blob): P
 
     // If we don't have a pre-processed blob (e.g. from display logic), ensuring we have a readable image
     if (!preProcessedBlob && file && !isBrowserRenderable(file)) {
-         const extracted = await runWorkerTask('extractPreviewFromRaw', { file });
+         const extracted = await extractPreviewFromRaw(file);
          if (extracted) {
              sourceBlob = extracted;
          } else if (isRaw) {
