@@ -41,14 +41,6 @@ const isValidImageBlob = async (blob: Blob): Promise<boolean> => {
 
 // INLINED WORKER CODE (Pure JS) to avoid file path/bundling issues
 const WORKER_SCRIPT = `
-const isValidImageBlob = async (blob) => {
-    try {
-        const bitmap = await createImageBitmap(blob);
-        bitmap.close();
-        return true;
-    } catch (e) { return false; }
-};
-
 const cleanString = (str) => {
     str = str.replace(/\\0/g, '').trim();
     const upper = str.toUpperCase();
@@ -452,7 +444,11 @@ const extractDetailedMetadata = async (file) => {
             }
             return null;
         };
+        const seenOffsets = new Set();
         const parseIFD = (offset) => {
+            if (seenOffsets.has(offset)) return;
+            seenOffsets.add(offset);
+            
             if (tiffStart + offset + 2 > length) return;
             const numEntries = view.getUint16(tiffStart + offset, isLittleEndian);
             for (let i = 0; i < numEntries; i++) {
@@ -749,6 +745,15 @@ interface WorkerTask {
 }
 
 const workerCallbacks = new Map<string, WorkerTask>();
+
+worker.onerror = (e) => {
+    console.error("Worker crashed globally:", e);
+    // Reject all pending tasks to prevent infinite hanging
+    for (const [id, task] of workerCallbacks.entries()) {
+        task.reject(new Error("Worker crashed: " + (e.message || "Unknown error")));
+    }
+    workerCallbacks.clear();
+};
 
 worker.onmessage = (e) => {
     const { id, success, result, error } = e.data;
