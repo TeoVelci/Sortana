@@ -556,7 +556,7 @@ const extractPreviewFromRaw = async (file) => {
     try {
         // Step 1: See if EXIF gave us the exact offset and length of the JPEG thumbnail
         try {
-            const meta = await extractMetadata(file);
+            const meta = await extractDetailedMetadata(file);
             if (meta && meta.previewOffset && meta.previewLength && meta.previewLength > 1000) {
                 const previewSlice = file.slice(meta.previewOffset, meta.previewOffset + meta.previewLength);
                 const blob = new Blob([await previewSlice.arrayBuffer()], { type: 'image/jpeg' });
