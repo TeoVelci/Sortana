@@ -41,6 +41,14 @@ const isValidImageBlob = async (blob: Blob): Promise<boolean> => {
 
 // INLINED WORKER CODE (Pure JS) to avoid file path/bundling issues
 const WORKER_SCRIPT = `
+const isValidImageBlob = async (blob) => {
+    try {
+        const bitmap = await createImageBitmap(blob);
+        bitmap.close();
+        return true;
+    } catch (e) { return false; }
+};
+
 const cleanString = (str) => {
     str = str.replace(/\\0/g, '').trim();
     const upper = str.toUpperCase();
@@ -430,8 +438,18 @@ const extractDetailedMetadata = async (file) => {
                 }
                 return str.trim();
             }
-            if (type === 3) return view.getUint16(offset + 8, isLittleEndian);
-            if (type === 4) return view.getUint32(offset + 8, isLittleEndian);
+            if (type === 3) {
+                if (count === 1) return view.getUint16(offset + 8, isLittleEndian);
+                const actualOffset = count > 2 ? tiffStart + view.getUint32(offset + 8, isLittleEndian) : offset + 8;
+                if (actualOffset > length - 2) return null;
+                return view.getUint16(actualOffset, isLittleEndian); // Return first element of array
+            }
+            if (type === 4) {
+                if (count === 1) return view.getUint32(offset + 8, isLittleEndian);
+                const actualOffset = tiffStart + view.getUint32(offset + 8, isLittleEndian);
+                if (actualOffset > length - 4) return null;
+                return view.getUint32(actualOffset, isLittleEndian); // Return first element of array
+            }
             return null;
         };
         const parseIFD = (offset) => {
