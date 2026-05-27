@@ -330,10 +330,10 @@ export const TourProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 4. Smart Tooltip Positioning
             const tooltipWidth = Math.min(320, window.innerWidth - 32);
-            const tooltipHeight = 200; // approx
-            const gap = 20;
+            const gap = 24; // Safety gap from bottom edge/home bar
 
-            let top: number;
+            let top: number | 'auto' = 'auto';
+            let bottom: number | 'auto' = 'auto';
             let left: number;
             const transform = '';
             
@@ -345,11 +345,12 @@ export const TourProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     // Target is in lower half, put tooltip near top
                     top = 80;
                 } else {
-                    // Target is in upper half (or very large), put tooltip near bottom
-                    top = window.innerHeight - tooltipHeight - gap;
+                    // Target is in upper half (or very large), put tooltip near bottom using `bottom` CSS property to prevent cutoffs
+                    bottom = gap;
                 }
                 left = (window.innerWidth - tooltipWidth) / 2;
             } else {
+                const tooltipHeight = 200; // approx for desktop
                 // Determine quadrant for desktop
                 const spaceTop = rect.top;
                 const spaceBottom = window.innerHeight - rect.bottom;
@@ -380,11 +381,11 @@ export const TourProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (left < 10) left = 10;
             if (left + tooltipWidth > window.innerWidth) left = window.innerWidth - tooltipWidth - 10;
 
-            setTooltipStyle({
-                top,
-                left,
-                transform
-            });
+            const finalStyle: React.CSSProperties = { left, transform };
+            if (top !== 'auto') finalStyle.top = top;
+            if (bottom !== 'auto') finalStyle.bottom = bottom;
+
+            setTooltipStyle(finalStyle);
             
             // Fade in text after glide starts
             setIsTooltipVisible(false);
