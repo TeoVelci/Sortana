@@ -1693,7 +1693,7 @@ export const editImageWithAI = async (originalUrl: string, prompt: string): Prom
         const base64Data = await blobUrlToBase64(originalUrl);
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
-            model: 'gemini-3.1-flash-image-preview', 
+            model: 'gemini-3.1-flash-image', 
             contents: [
                 { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
                 { text: `Edit this image: ${prompt}` }
