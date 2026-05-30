@@ -116,7 +116,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-500 dark:text-gray-400">
-          <Link className={`hover:text-gray-900 dark:hover:text-white transition-colors ${isActive('/pricing') ? 'text-primary dark:text-primary' : ''}`} to="/pricing">Pricing</Link>
+          {/* <Link className={`hover:text-gray-900 dark:hover:text-white transition-colors ${isActive('/pricing') ? 'text-primary dark:text-primary' : ''}`} to="/pricing">Pricing</Link> */}
           <Link className={`text-gray-900 dark:text-white relative ${isActive('/dashboard') ? "after:content-[''] after:absolute after:-bottom-5 after:left-0 after:w-full after:h-0.5 after:bg-primary after:shadow-[0_0_10px_rgba(99,102,241,0.5)]" : ""}`} to="/dashboard">Dashboard</Link>
           <Link 
             onClick={() => setCurrentFolderId(null)}
@@ -231,7 +231,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
           <Link to="/dashboard" onClick={toggleMobileMenu} className="flex items-center gap-3 text-primary"><i className="fa-solid fa-border-all w-6 text-center"></i> Dashboard</Link>
           <Link to="/browse" onClick={() => { toggleMobileMenu(); setCurrentFolderId(null); }} className="flex items-center gap-3 hover:text-primary transition-colors"><i className="fa-solid fa-folder-tree w-6 text-center"></i> Organized Files</Link>
-          <Link to="/pricing" onClick={toggleMobileMenu} className="flex items-center gap-3 hover:text-primary transition-colors"><i className="fa-solid fa-tag w-6 text-center"></i> Pricing</Link>
+          {/* <Link to="/pricing" onClick={toggleMobileMenu} className="flex items-center gap-3 hover:text-primary transition-colors"><i className="fa-solid fa-tag w-6 text-center"></i> Pricing</Link> */}
           <Link to="/account" onClick={toggleMobileMenu} className="flex items-center gap-3 hover:text-primary transition-colors"><i className="fa-solid fa-gear w-6 text-center"></i> Account Settings</Link>
           <button onClick={handleLogout} className="flex items-center gap-3 text-red-500 mt-4"><i className="fa-solid fa-right-from-bracket w-6 text-center"></i> Log Out</button>
         </nav>

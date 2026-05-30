@@ -28,7 +28,7 @@ export const PublicNav: React.FC = () => (
                   </Link>
               </div>
               <div className="flex items-center space-x-6">
-                  <Link className="text-sm font-medium text-text-muted-dark hover:text-primary transition-colors" to="/pricing">Pricing</Link>
+                  {/* <Link className="text-sm font-medium text-text-muted-dark hover:text-primary transition-colors" to="/pricing">Pricing</Link> */}
                   <Link className="text-sm font-medium text-text-muted-dark hover:text-primary transition-colors" to="/login">Login</Link>
                   <Link className="bg-primary hover:bg-primary-hover text-white text-sm font-semibold py-2 px-4 rounded-md transition-colors shadow-lg shadow-primary/30" to="/signup">
                       Get Started
@@ -44,7 +44,7 @@ export const PublicFooter: React.FC = () => (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center">
           <p className="text-gray-500 text-sm mb-4">© 2025 Sortana AI. All Rights Reserved.</p>
           <div className="flex space-x-6 text-sm">
-              <Link className="text-gray-500 hover:text-white transition-colors" to="/pricing">Pricing</Link>
+              {/* <Link className="text-gray-500 hover:text-white transition-colors" to="/pricing">Pricing</Link> */}
               <Link className="text-gray-500 hover:text-white transition-colors" to="/terms">Terms of Service</Link>
               <Link className="text-gray-500 hover:text-white transition-colors" to="/privacy">Privacy Policy</Link>
           </div>
@@ -176,11 +176,11 @@ const LandingPage: React.FC = () => {
                   </div>
               </div>
               
-              <div className="mt-16 text-center">
+              {/* <div className="mt-16 text-center">
                   <Link to="/pricing" className="btn-glow inline-block bg-primary text-white font-bold py-4 px-10 text-xl rounded-xl border border-indigo-400/30 hover:bg-primary-hover transition-transform duration-300 transform hover:-translate-y-1 shadow-[0_0_15px_rgba(99,102,241,0.5)]">
                       Check out our pricing plans
                   </Link>
-              </div>
+              </div> */}
           </div>
       </section>
 
