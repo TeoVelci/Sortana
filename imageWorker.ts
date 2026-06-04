@@ -208,9 +208,9 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
         const OVERLAP = 1024; // 1KB overlap
         const candidates: any[] = [];
         
-        // Scan the first 40MB and last 10MB - most previews are there
+        // Scan the first 100MB and last 10MB to ensure we catch all embedded previews
         const scanRanges = [
-            { start: 0, end: Math.min(fileSize, 40 * 1024 * 1024) },
+            { start: 0, end: Math.min(fileSize, 100 * 1024 * 1024) },
             { start: Math.max(0, fileSize - 10 * 1024 * 1024), end: fileSize }
         ];
 
@@ -223,26 +223,37 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
 
                 for (let i = 0; i < len - 4; i++) {
                     if (bytes[i] === 0xFF && bytes[i+1] === 0xD8 && bytes[i+2] === 0xFF) {
-                        // Found a JPEG header candidate
                         const absoluteStart = offset + i;
-                        
-                        // Find end marker (FF D9)
-                        // We'll read a larger slice to find the end
-                        const searchSlice = file.slice(absoluteStart, absoluteStart + 15 * 1024 * 1024); // Up to 15MB for a single preview
+                        const searchSlice = file.slice(absoluteStart, absoluteStart + 15 * 1024 * 1024);
                         const searchBuffer = await searchSlice.arrayBuffer();
                         const searchBytes = new Uint8Array(searchBuffer);
                         
                         let end = -1;
-                        for (let j = 0; j < searchBytes.length - 1; j++) {
-                            if (searchBytes[j] === 0xFF && searchBytes[j+1] === 0xD9) {
-                                end = j + 2;
-                                break;
+                        let sOffset = 2; // skip FF D8
+                        while (sOffset < searchBytes.length - 1) {
+                            if (searchBytes[sOffset] === 0xFF) {
+                                const marker = searchBytes[sOffset + 1];
+                                if (marker === 0xD9) { // End of Image
+                                    end = sOffset + 2;
+                                    break;
+                                } else if (marker >= 0xD0 && marker <= 0xD7) { // RST markers
+                                    sOffset += 2;
+                                } else if (marker === 0x01 || (marker >= 0xE0 && marker <= 0xFE) || marker === 0xDB || marker === 0xC0 || marker === 0xC4 || marker === 0xDD) {
+                                    if (sOffset + 3 >= searchBytes.length) break;
+                                    const segLen = (searchBytes[sOffset + 2] << 8) | searchBytes[sOffset + 3];
+                                    sOffset += 2 + segLen;
+                                } else if (marker === 0x00 || marker === 0xFF) {
+                                    sOffset += 1;
+                                } else {
+                                    sOffset += 2;
+                                }
+                            } else {
+                                sOffset++;
                             }
                         }
 
-                        if (end > 2000) { // Minimum size for a valid preview
+                        if (end > 2000) { 
                             candidates.push({ start: absoluteStart, size: end, blob: new Blob([searchBytes.slice(0, end)], { type: 'image/jpeg' }) });
-                            // Skip ahead in the outer loop
                             i += end; 
                         }
                     }
@@ -252,9 +263,7 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
         
         if (candidates.length === 0) return null;
         
-        // Sort by size descending - we want the highest resolution preview
         candidates.sort((a, b) => b.size - a.size);
-        
         for (const c of candidates) {
             if (await isValidImageBlob(c.blob)) return c.blob;
         }

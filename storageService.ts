@@ -149,11 +149,19 @@ export const multipartUploadFileToS3 = async (
           });
           if (signError) throw signError;
           
-          // 2b. Upload Chunk
-          const res = await fetch(signData.url, {
-            method: 'PUT',
-            body: chunk,
-          });
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout to prevent browser connection queue aborts
+          
+          let res;
+          try {
+              res = await fetch(signData.url, {
+                method: 'PUT',
+                body: chunk,
+                signal: controller.signal
+              });
+          } finally {
+              clearTimeout(timeoutId);
+          }
           
           if (!res.ok) throw new Error(`Upload part ${partNumber} failed: ${res.status}`);
           
@@ -166,11 +174,17 @@ export const multipartUploadFileToS3 = async (
     const maxConcurrent = 3;
     let partsCompleted = 0;
     const promises: Promise<any>[] = [];
+    let hasFailed = false;
 
     for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+      if (hasFailed) break;
+      
       while (activeUploads >= maxConcurrent) {
+        if (hasFailed) break;
         await new Promise(resolve => setTimeout(resolve, 100)); // wait
       }
+      
+      if (hasFailed) break;
       
       const start = (partNumber - 1) * CHUNK_SIZE;
       const end = Math.min(start + CHUNK_SIZE, file.size);
@@ -184,6 +198,7 @@ export const multipartUploadFileToS3 = async (
         if (onProgress) onProgress(Math.round((partsCompleted / totalParts) * 100));
       }).catch(err => {
         activeUploads--;
+        hasFailed = true;
         throw err;
       });
       promises.push(promise);
