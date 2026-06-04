@@ -1109,8 +1109,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const videoAnalysisTasksToQueue: { id: string, fileInfo: { name: string, type: string }, rawMetadata: string }[] = [];
     const folderMap = new Map<string, string>();
 
-    // Deduplicate: Don't process files that already exist in the UI for this session
-    const existingNames = new Set(items.map(i => i.name));
+    // Deduplicate: Don't process files that already exist in the UI for this project
+    const existingNames = new Set(items.filter(i => i.type === 'file' && i.tags?.includes(projectTag)).map(i => i.name));
     const uniqueFiles = files.filter(f => !existingNames.has(f.name));
     if (uniqueFiles.length === 0) {
         console.log("All selected files are already in the project.");
