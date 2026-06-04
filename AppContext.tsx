@@ -1109,11 +1109,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const videoAnalysisTasksToQueue: { id: string, fileInfo: { name: string, type: string }, rawMetadata: string }[] = [];
     const folderMap = new Map<string, string>();
 
+    // Deduplicate: Don't process files that already exist in the UI for this session
+    const existingNames = new Set(items.map(i => i.name));
+    const uniqueFiles = files.filter(f => !existingNames.has(f.name));
+    if (uniqueFiles.length === 0) {
+        console.log("All selected files are already in the project.");
+        return;
+    }
+    
     // 1. Identify sidecar XML files and Ghost iOS JPEGs
     const xmlMap = new Map<string, File>();
     const videoBases = new Set<string>();
 
-    for (const f of files) {
+    for (const f of uniqueFiles) {
         if (f.name.toLowerCase().endsWith('.xml')) {
             const baseName = f.name.substring(0, f.name.lastIndexOf('.')).toUpperCase();
             xmlMap.set(baseName, f);
@@ -1125,7 +1133,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // 2. Pre-pass for Enhanced/Edited files to borrow metadata for stripped RAW files
     const enhancedMetadataDict = new Map<string, { make?: string, model?: string }>();
-    for (const f of files) {
+    for (const f of uniqueFiles) {
         const lowerName = f.name.toLowerCase();
         if (lowerName.includes('-enhanced') || lowerName.includes('-edited')) {
             try {
@@ -1142,7 +1150,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const uploadTasks: (() => Promise<void>)[] = [];
 
-    for (const f of files) {
+    for (const f of uniqueFiles) {
       if (f.name.toLowerCase().endsWith('.xml')) continue; // Skip XML files as items, they are sidecars
 
       // Filter out iOS Safari ghost JPEGs injected alongside videos

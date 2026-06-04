@@ -233,18 +233,34 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
                         while (sOffset < searchBytes.length - 1) {
                             if (searchBytes[sOffset] === 0xFF) {
                                 const marker = searchBytes[sOffset + 1];
-                                if (marker === 0xD9) { // End of Image
+                                if (marker === 0xFF) {
+                                    // Padding, skip
+                                    sOffset++;
+                                } else if (marker === 0x00) {
+                                    // Byte stuffing, shouldn't happen here but just skip
+                                    sOffset += 2;
+                                } else if (marker === 0xD9) { // End of Image
                                     end = sOffset + 2;
                                     break;
                                 } else if (marker >= 0xD0 && marker <= 0xD7) { // RST markers
                                     sOffset += 2;
-                                } else if (marker === 0x01 || (marker >= 0xE0 && marker <= 0xFE) || marker === 0xDB || marker === 0xC0 || marker === 0xC4 || marker === 0xDD) {
+                                } else if (marker === 0xDA) { // SOS (Start of Scan)
                                     if (sOffset + 3 >= searchBytes.length) break;
                                     const segLen = (searchBytes[sOffset + 2] << 8) | searchBytes[sOffset + 3];
                                     sOffset += 2 + segLen;
-                                } else if (marker === 0x00 || marker === 0xFF) {
-                                    sOffset += 1;
+                                    // Entropy data follows. Scan byte-by-byte for next marker (ignoring FF 00)
+                                    while (sOffset < searchBytes.length - 1) {
+                                        if (searchBytes[sOffset] === 0xFF && searchBytes[sOffset + 1] !== 0x00 && searchBytes[sOffset + 1] !== 0xFF) {
+                                            break;
+                                        }
+                                        sOffset++;
+                                    }
+                                } else if ((marker >= 0xC0 && marker <= 0xCF) || (marker >= 0xE0 && marker <= 0xFE) || marker === 0xDB || marker === 0xDD || marker === 0xDC) {
+                                    if (sOffset + 3 >= searchBytes.length) break;
+                                    const segLen = (searchBytes[sOffset + 2] << 8) | searchBytes[sOffset + 3];
+                                    sOffset += 2 + segLen;
                                 } else {
+                                    // Unknown marker, just step forward
                                     sOffset += 2;
                                 }
                             } else {
