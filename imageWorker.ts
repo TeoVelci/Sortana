@@ -228,30 +228,59 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
                         const searchBuffer = await searchSlice.arrayBuffer();
                         const searchBytes = new Uint8Array(searchBuffer);
                         
+                        let sOffset = 2; // skip FF D8
                         let foundEnd = -1;
                         
-                        // Scan forward for all FF D9 (End of Image) markers
-                        for (let j = 2; j < searchBytes.length - 1; j++) {
-                            if (searchBytes[j] === 0xFF && searchBytes[j+1] === 0xD9) {
-                                const possibleEnd = j + 2;
-                                if (possibleEnd > 2000) {
-                                    const sliceBlob = new Blob([searchBytes.slice(0, possibleEnd)], { type: 'image/jpeg' });
-                                    try {
-                                        // The browser's native decoder is the ultimate validator
-                                        const bitmap = await createImageBitmap(sliceBlob);
-                                        const area = bitmap.width * bitmap.height;
-                                        candidates.push({ area, bitmap, blob: sliceBlob });
-                                        foundEnd = possibleEnd;
-                                        // We DO NOT break! We keep searching in case this was just an embedded thumbnail.
-                                    } catch (e) {
-                                        // Invalid JPEG endpoint, keep searching
+                        while (sOffset < searchBytes.length - 1) {
+                            if (searchBytes[sOffset] === 0xFF) {
+                                const marker = searchBytes[sOffset + 1];
+                                if (marker === 0xFF) {
+                                    // Padding, skip
+                                    sOffset++;
+                                } else if (marker === 0x00) {
+                                    // Byte stuffing
+                                    sOffset += 2;
+                                } else if (marker === 0xD9) { // End of Image
+                                    const possibleEnd = sOffset + 2;
+                                    if (possibleEnd > 2000) {
+                                        const sliceBlob = new Blob([searchBytes.slice(0, possibleEnd)], { type: 'image/jpeg' });
+                                        try {
+                                            const bitmap = await createImageBitmap(sliceBlob);
+                                            candidates.push({ area: bitmap.width * bitmap.height, bitmap, blob: sliceBlob });
+                                            foundEnd = possibleEnd;
+                                        } catch (e) {
+                                            // Keep searching if this was a false positive or embedded thumbnail
+                                        }
                                     }
+                                    sOffset += 2; 
+                                } else if (marker >= 0xD0 && marker <= 0xD7) { // RST markers
+                                    sOffset += 2;
+                                } else if (marker === 0xDA) { // SOS (Start of Scan)
+                                    if (sOffset + 3 >= searchBytes.length) break;
+                                    const segLen = (searchBytes[sOffset + 2] << 8) | searchBytes[sOffset + 3];
+                                    sOffset += 2 + segLen;
+                                    // Entropy data follows. Scan byte-by-byte for next marker (ignoring FF 00)
+                                    while (sOffset < searchBytes.length - 1) {
+                                        if (searchBytes[sOffset] === 0xFF && searchBytes[sOffset + 1] !== 0x00 && searchBytes[sOffset + 1] !== 0xFF) {
+                                            break;
+                                        }
+                                        sOffset++;
+                                    }
+                                } else if ((marker >= 0xC0 && marker <= 0xCF) || (marker >= 0xE0 && marker <= 0xFE) || marker === 0xDB || marker === 0xDD || marker === 0xDC) {
+                                    if (sOffset + 3 >= searchBytes.length) break;
+                                    const segLen = (searchBytes[sOffset + 2] << 8) | searchBytes[sOffset + 3];
+                                    sOffset += 2 + segLen;
+                                } else {
+                                    // Unknown marker, just step forward
+                                    sOffset += 2;
                                 }
+                            } else {
+                                sOffset++;
                             }
                         }
-
-                        if (foundEnd > -1) { 
-                            i += foundEnd; 
+                        
+                        if (foundEnd > -1) {
+                            i += foundEnd;
                         }
                     }
                 }

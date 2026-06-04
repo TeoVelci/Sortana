@@ -165,7 +165,10 @@ export const multipartUploadFileToS3 = async (
           
           if (!res.ok) throw new Error(`Upload part ${partNumber} failed: ${res.status}`);
           
-          return { PartNumber: partNumber };
+          const eTag = res.headers.get('ETag') || res.headers.get('etag');
+          if (!eTag) throw new Error(`Upload part ${partNumber} failed: No ETag returned`);
+          
+          return { ETag: eTag.replace(/"/g, ''), PartNumber: partNumber };
       });
     };
 
@@ -211,7 +214,7 @@ export const multipartUploadFileToS3 = async (
     // 3. Complete Multipart
     await withRetry(async () => {
         const { error: completeError } = await supabase.functions.invoke('get-aws-presigned-url', {
-          body: { action: 'completeMultipart', uploadId, key }
+          body: { action: 'completeMultipart', uploadId, key, parts: uploadedParts }
         });
         if (completeError) throw completeError;
     });
