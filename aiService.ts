@@ -1152,6 +1152,54 @@ export const extractDetailedMetadata = async (file: File): Promise<ImageMetadata
  * 1. Checks if RAW extraction needed.
  * 2. Uses Worker to extract or resize.
  */
+const resizeImageMainThread = async (blob: Blob, orientation: number, maxSize: number): Promise<Blob> => {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const bitmap = await createImageBitmap(blob);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                bitmap.close();
+                return reject(new Error("No 2d context"));
+            }
+
+            const isRotated90 = orientation >= 5 && orientation <= 8;
+            let outputWidth = isRotated90 ? bitmap.height : bitmap.width;
+            let outputHeight = isRotated90 ? bitmap.width : bitmap.height;
+
+            if (outputWidth > maxSize || outputHeight > maxSize) {
+                const ratio = outputWidth / outputHeight;
+                if (outputWidth > outputHeight) {
+                    outputWidth = maxSize;
+                    outputHeight = Math.round(maxSize / ratio);
+                } else {
+                    outputHeight = maxSize;
+                    outputWidth = Math.round(maxSize * ratio);
+                }
+            }
+
+            canvas.width = outputWidth;
+            canvas.height = outputHeight;
+
+            ctx.save();
+            if (orientation === 2) { ctx.translate(outputWidth, 0); ctx.scale(-1, 1); ctx.drawImage(bitmap, 0, 0, outputWidth, outputHeight); } 
+            else if (orientation === 3) { ctx.translate(outputWidth, outputHeight); ctx.rotate(Math.PI); ctx.drawImage(bitmap, 0, 0, outputWidth, outputHeight); } 
+            else if (orientation === 4) { ctx.translate(0, outputHeight); ctx.scale(1, -1); ctx.drawImage(bitmap, 0, 0, outputWidth, outputHeight); } 
+            else if (orientation === 5) { ctx.rotate(0.5 * Math.PI); ctx.scale(1, -1); ctx.drawImage(bitmap, 0, 0, outputHeight, outputWidth); } 
+            else if (orientation === 6) { ctx.translate(outputWidth, 0); ctx.rotate(0.5 * Math.PI); ctx.drawImage(bitmap, 0, 0, outputHeight, outputWidth); } 
+            else if (orientation === 7) { ctx.rotate(0.5 * Math.PI); ctx.translate(outputWidth, -outputHeight); ctx.scale(-1, 1); ctx.drawImage(bitmap, 0, 0, outputHeight, outputWidth); } 
+            else if (orientation === 8) { ctx.translate(0, outputHeight); ctx.rotate(-0.5 * Math.PI); ctx.drawImage(bitmap, 0, 0, outputHeight, outputWidth); } 
+            else { ctx.drawImage(bitmap, 0, 0, outputWidth, outputHeight); }
+            ctx.restore();
+            bitmap.close();
+
+            canvas.toBlob((b) => b ? resolve(b) : reject(new Error("Canvas toBlob failed")), 'image/jpeg', 0.95);
+        } catch (e) {
+            reject(e);
+        }
+    });
+};
+
 export const processFileForDisplay = async (file: File, maxSize: number = 2560): Promise<Blob | null> => {
     let sourceBlob: Blob | null = file;
     let orientation = 1;
@@ -1170,11 +1218,7 @@ export const processFileForDisplay = async (file: File, maxSize: number = 2560):
         try {
             const thumb = await runWorkerTask('extractEmbeddedThumbnailFromMp4', { file });
             if (thumb) sourceBlob = thumb;
-            else {
-                // Fallback: try to extract frames using the main thread video element
-                // We'll return null here and let the UI handle the "Proxy" generation if needed
-                return null;
-            }
+            else return null;
         } catch (e) {
             return null;
         }
@@ -1197,7 +1241,7 @@ export const processFileForDisplay = async (file: File, maxSize: number = 2560):
         else return null;
     }
 
-    // 3. Resize/Standardize in Worker
+    // 4. Resize/Standardize in Worker
     try {
         // We always run through resize to correct orientation and ensure standard JPEG output
         const resizedBlob = await runWorkerTask('resizeImage', { 
@@ -1206,10 +1250,21 @@ export const processFileForDisplay = async (file: File, maxSize: number = 2560):
             maxSize: maxSize, 
             type: 'image/jpeg' 
         });
+        
+        if (!resizedBlob || resizedBlob.size < 100) {
+            throw new Error("Worker returned empty or corrupted blob");
+        }
+        
         return resizedBlob;
     } catch (e) {
-        console.error("Worker resizing failed, falling back to source", e);
-        return sourceBlob; 
+        console.warn("Worker resizing failed, attempting bulletproof main-thread fallback...");
+        try {
+            return await resizeImageMainThread(sourceBlob, orientation, maxSize);
+        } catch (e2) {
+            console.error("Main thread fallback failed", e2);
+            // If even the main thread fails (e.g. img tag rejects the bytes completely), return null to show CAMERA icon instead of broken PREVIEW ERROR
+            return null; 
+        }
     }
 };
 
