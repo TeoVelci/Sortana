@@ -264,6 +264,9 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
                                             while (p < originalBytes.length - 1) {
                                                 if (originalBytes[p] === 0xFF) {
                                                     const marker = originalBytes[p + 1];
+                                                    if (marker === 0xFF) { p++; continue; } // Padding
+                                                    if (marker === 0x00) { p += 2; continue; } // Byte stuffing
+                                                    
                                                     if (marker === 0xD9) {
                                                         chunks.push(originalBytes.slice(p, p + 2));
                                                         break;

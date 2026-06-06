@@ -574,6 +574,9 @@ const extractPreviewFromRaw = async (file) => {
                     while (p < originalBytes.length - 1) {
                         if (originalBytes[p] === 0xFF) {
                             const marker = originalBytes[p + 1];
+                            if (marker === 0xFF) { p++; continue; } // Padding
+                            if (marker === 0x00) { p += 2; continue; } // Byte stuffing
+                            
                             if (marker === 0xD9) { chunks.push(originalBytes.slice(p, p + 2)); break; }
                             if (marker === 0xDA) { chunks.push(originalBytes.slice(p, originalBytes.length)); break; }
                             if (marker === 0xE1 || marker === 0xE2) {
@@ -683,6 +686,9 @@ const extractPreviewFromRaw = async (file) => {
                                 while (p < originalBytes.length - 1) {
                                     if (originalBytes[p] === 0xFF) {
                                         const marker = originalBytes[p + 1];
+                                        if (marker === 0xFF) { p++; continue; } // Padding
+                                        if (marker === 0x00) { p += 2; continue; } // Byte stuffing
+                                        
                                         if (marker === 0xD9) {
                                             chunks.push(originalBytes.slice(p, p + 2));
                                             break;
