@@ -243,14 +243,41 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
                                 } else if (marker === 0xD9) { // End of Image
                                     const possibleEnd = sOffset + 2;
                                     if (possibleEnd > 2000) {
-                                        const sliceBlob = new Blob([searchBytes.slice(0, possibleEnd)], { type: 'image/jpeg' });
+                                        // Clean the JPEG to remove EXIF/MakerNote thumbnails so createImageBitmap reads the true image
+                                        const cleanJpeg = (originalBytes: Uint8Array): Blob => {
+                                            const chunks = [];
+                                            let p = 2;
+                                            chunks.push(originalBytes.slice(0, 2));
+                                            while (p < originalBytes.length - 1) {
+                                                if (originalBytes[p] === 0xFF) {
+                                                    const m = originalBytes[p + 1];
+                                                    if (m === 0xFF) { p++; continue; }
+                                                    if (m === 0x00) { p += 2; continue; }
+                                                    if (m === 0xD9) { chunks.push(originalBytes.slice(p, p + 2)); break; }
+                                                    if (m === 0xDA) { chunks.push(originalBytes.slice(p)); break; }
+                                                    const len = (originalBytes[p + 2] << 8) | originalBytes[p + 3];
+                                                    // Strip APP1 (EXIF), APP2 (MakerNote), APP13 (IRB)
+                                                    if (m !== 0xE1 && m !== 0xE2 && m !== 0xED) {
+                                                        chunks.push(originalBytes.slice(p, p + 2 + len));
+                                                    }
+                                                    p += 2 + len;
+                                                } else {
+                                                    p++;
+                                                }
+                                            }
+                                            return new Blob(chunks, { type: 'image/jpeg' });
+                                        };
+
+                                        const rawSlice = searchBytes.slice(0, possibleEnd);
+                                        const cleanBlob = cleanJpeg(rawSlice);
+                                        
                                         try {
-                                            const bitmap = await createImageBitmap(sliceBlob);
-                                            candidates.push({ area: bitmap.width * bitmap.height, bitmap, blob: sliceBlob });
+                                            const bitmap = await createImageBitmap(cleanBlob);
+                                            candidates.push({ area: bitmap.width * bitmap.height, bitmap, blob: cleanBlob });
                                             foundEnd = possibleEnd;
-                                            break; // IMPORTANT: Stop searching for FF D9 from this FF D8! Let outer loop find the NEXT FF D8 for the real image!
+                                            break; // IMPORTANT: Stop searching for FF D9 from this FF D8!
                                         } catch (e) {
-                                            // Keep searching if this was a false positive or embedded thumbnail
+                                            // Keep searching if this was a false positive
                                         }
                                     }
                                     sOffset += 2; 
