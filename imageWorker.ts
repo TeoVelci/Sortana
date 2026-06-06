@@ -342,7 +342,7 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
 const resizeImage = async (blob: Blob, orientation: number = 1, maxSize: number = 2560, type: string = 'image/jpeg') => {
     // 1. Create Bitmap
     try {
-        const bitmap = await createImageBitmap(blob);
+        let bitmap = await createImageBitmap(blob);
         const { width, height } = bitmap;
         
         // 2. Calculate Dimensions & Orientation
@@ -356,15 +356,27 @@ const resizeImage = async (blob: Blob, orientation: number = 1, maxSize: number 
         let outputHeight = isRotated90 ? srcWidth : srcHeight;
 
         // Scale down if needed
+        let needsNativeResize = false;
+        let nativeResizeWidth = srcWidth;
+        
         if (outputWidth > maxSize || outputHeight > maxSize) {
             const ratio = outputWidth / outputHeight;
             if (outputWidth > outputHeight) {
                 outputWidth = maxSize;
                 outputHeight = Math.round(maxSize / ratio);
+                nativeResizeWidth = isRotated90 ? outputHeight : outputWidth;
             } else {
                 outputHeight = maxSize;
                 outputWidth = Math.round(maxSize * ratio);
+                nativeResizeWidth = isRotated90 ? outputHeight : outputWidth;
             }
+            needsNativeResize = true;
+        }
+
+        // Avoid uploading massive 24MP+ textures to Safari GPU (causes silent context loss & corrupt blobs)
+        if (needsNativeResize) {
+            bitmap.close();
+            bitmap = await createImageBitmap(blob, { resizeWidth: nativeResizeWidth, resizeQuality: 'high' });
         }
 
         // 3. Draw to OffscreenCanvas
