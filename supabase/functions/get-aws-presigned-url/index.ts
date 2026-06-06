@@ -56,19 +56,20 @@ serve(async (req) => {
 
       const command = new GetObjectCommand(commandParams);
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-      const shouldRedirect = url.searchParams.get('redirect') !== 'false';
+      
+      const isJsonRequest = req.headers.get('accept')?.includes('application/json');
 
-      if (shouldRedirect) {
+      if (!isJsonRequest) {
         return new Response(null, {
           status: 302,
           headers: { ...corsHeaders, 'Location': signedUrl }
         });
-      } else {
-        return new Response(JSON.stringify({ url: signedUrl }), {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
       }
+      
+      return new Response(JSON.stringify({ url: signedUrl }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     if (req.method === 'POST') {

@@ -166,7 +166,7 @@ export const multipartUploadFileToS3 = async (
           try {
               res = await fetch(signData.url, {
                 method: 'PUT',
-                body: chunk,
+                body: new Blob([chunk]), // Strip type to prevent fetch from sending unsigned Content-Type header
                 signal: controller.signal
               });
           } finally {

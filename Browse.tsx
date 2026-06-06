@@ -26,7 +26,10 @@ const VideoThumbnail = ({ item }: { item: FileSystemItem }) => {
         );
     }
 
-    if (hasError) {
+    // Prevent hardware decoding crash for known HEVC sources on Chrome if no proxy exists
+    const isDangerousHEVC = !item.proxyS3Key && (item.make?.toLowerCase().includes('sony') || item.name.match(/\.(hevc|h265)$/i));
+
+    if (hasError || isDangerousHEVC) {
         return (
             <div className="flex flex-col items-center gap-2 p-2 text-center text-gray-500">
                 <i className="fa-solid fa-video-slash text-4xl mb-2"></i>
