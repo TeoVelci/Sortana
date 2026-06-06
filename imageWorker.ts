@@ -248,6 +248,7 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
                                             const bitmap = await createImageBitmap(sliceBlob);
                                             candidates.push({ area: bitmap.width * bitmap.height, bitmap, blob: sliceBlob });
                                             foundEnd = possibleEnd;
+                                            break; // IMPORTANT: Stop searching for FF D9 from this FF D8! Let outer loop find the NEXT FF D8 for the real image!
                                         } catch (e) {
                                             // Keep searching if this was a false positive or embedded thumbnail
                                         }
