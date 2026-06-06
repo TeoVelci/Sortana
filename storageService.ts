@@ -52,11 +52,21 @@ export const getPresignedUrl = async (filename: string, filetype: string): Promi
  */
 export const uploadFileToS3 = async (file: File | Blob, presignedUrl: string) => {
     return withRetry(async () => {
-        const res = await fetch(presignedUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': (file as File).type || 'application/octet-stream' },
-          body: file,
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
+
+        let res;
+        try {
+            res = await fetch(presignedUrl, {
+              method: 'PUT',
+              headers: { 'Content-Type': (file as File).type || 'application/octet-stream' },
+              body: file,
+              signal: controller.signal
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
+
         if (!res.ok) {
           throw new Error(`Upload failed with status: ${res.status}`);
         }
