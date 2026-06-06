@@ -555,13 +555,41 @@ const extractDetailedMetadata = async (file) => {
 const extractPreviewFromRaw = async (file) => {
     try {
         // Step 1: See if EXIF gave us the exact offset and length of the JPEG thumbnail
+        // Step 1: See if EXIF gave us the exact offset and length of the JPEG thumbnail
         try {
             const meta = await extractDetailedMetadata(file);
             if (meta && meta.previewOffset && meta.previewLength && meta.previewLength > 1000) {
                 const previewSlice = file.slice(meta.previewOffset, meta.previewOffset + meta.previewLength);
-                const blob = new Blob([await previewSlice.arrayBuffer()], { type: 'image/jpeg' });
-                // We don't have isValidImageBlob inside worker, but we can assume EXIF offset is correct
-                return blob;
+                const searchBuffer = await previewSlice.arrayBuffer();
+                const searchBytes = new Uint8Array(searchBuffer);
+                
+                const cleanJpeg = (originalBytes: Uint8Array): Blob => {
+                    const chunks = [];
+                    let p = 2;
+                    chunks.push(originalBytes.slice(0, 2)); // FF D8
+                    chunks.push(new Uint8Array([
+                        0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00,
+                        0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00
+                    ]));
+                    while (p < originalBytes.length - 1) {
+                        if (originalBytes[p] === 0xFF) {
+                            const marker = originalBytes[p + 1];
+                            if (marker === 0xD9) { chunks.push(originalBytes.slice(p, p + 2)); break; }
+                            if (marker === 0xDA) { chunks.push(originalBytes.slice(p, originalBytes.length)); break; }
+                            if (marker === 0xE1 || marker === 0xE2) {
+                                const len = (originalBytes[p + 2] << 8) | originalBytes[p + 3];
+                                p += 2 + len;
+                                continue;
+                            }
+                            const len = (originalBytes[p + 2] << 8) | originalBytes[p + 3];
+                            chunks.push(originalBytes.slice(p, p + 2 + len));
+                            p += 2 + len;
+                        } else { p++; }
+                    }
+                    return new Blob(chunks, { type: 'image/jpeg' });
+                };
+                
+                return cleanJpeg(searchBytes);
             }
         } catch (e) { }
 
@@ -634,7 +662,50 @@ const extractPreviewFromRaw = async (file) => {
                         }
 
                         if (end > 2000) { // Minimum size for a valid preview
-                            candidates.push({ start: absoluteStart, size: end, blob: new Blob([searchBytes.slice(0, end)], { type: 'image/jpeg' }) });
+                            // Clean the JPEG to remove EXIF/MakerNote thumbnails so createImageBitmap reads the true image
+                            // We also MUST inject a standard APP0 JFIF marker, otherwise Chrome's strict Skia decoder rejects it completely!
+                            const cleanJpeg = (originalBytes: Uint8Array): Blob => {
+                                const chunks = [];
+                                let p = 2;
+                                chunks.push(originalBytes.slice(0, 2)); // FF D8
+
+                                // Inject standard APP0 JFIF marker (18 bytes total)
+                                chunks.push(new Uint8Array([
+                                    0xFF, 0xE0, // APP0 marker
+                                    0x00, 0x10, // Length (16 bytes)
+                                    0x4A, 0x46, 0x49, 0x46, 0x00, // "JFIF\0" identifier
+                                    0x01, 0x01, // Version 1.1
+                                    0x00, // Units (0 = no units)
+                                    0x00, 0x01, 0x00, 0x01, // X/Y density (1,1)
+                                    0x00, 0x00 // Thumbnail 0x0
+                                ]));
+
+                                while (p < originalBytes.length - 1) {
+                                    if (originalBytes[p] === 0xFF) {
+                                        const marker = originalBytes[p + 1];
+                                        if (marker === 0xD9) {
+                                            chunks.push(originalBytes.slice(p, p + 2));
+                                            break;
+                                        }
+                                        if (marker === 0xDA) {
+                                            chunks.push(originalBytes.slice(p, originalBytes.length));
+                                            break;
+                                        }
+                                        // SKIP APP1 and APP2 markers
+                                        if (marker === 0xE1 || marker === 0xE2) {
+                                            const len = (originalBytes[p + 2] << 8) | originalBytes[p + 3];
+                                            p += 2 + len;
+                                            continue;
+                                        }
+                                        const len = (originalBytes[p + 2] << 8) | originalBytes[p + 3];
+                                        chunks.push(originalBytes.slice(p, p + 2 + len));
+                                        p += 2 + len;
+                                    } else { p++; }
+                                }
+                                return new Blob(chunks, { type: 'image/jpeg' });
+                            };
+                            const cleanBlob = cleanJpeg(searchBytes.slice(0, end));
+                            candidates.push({ start: absoluteStart, size: end, blob: cleanBlob });
                             // Skip ahead in the outer loop
                             i += end; 
                         }
