@@ -268,7 +268,7 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
                                             return new Blob(chunks, { type: 'image/jpeg' });
                                         };
 
-                                        const rawSlice = searchBytes.slice(0, possibleEnd);
+                                        const rawSlice = searchBytes.slice(i, possibleEnd);
                                         const cleanBlob = cleanJpeg(rawSlice);
                                         
                                         try {

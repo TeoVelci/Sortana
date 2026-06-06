@@ -975,18 +975,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           // For Netlify/serverless deployment, we skip backend proxy generation
           // as it requires a dedicated server with FFmpeg.
-          // Instead, we just use the original video file.
+          // We cannot safely fallback to the original file because 10-bit HEVC crashes Chromium.
+          // We leave proxyS3Key undefined so Magic Editor won't attempt to play it.
           setItems(prev => prev.map(i => i.id === id ? { 
               ...i, 
-              proxyS3Key: key, 
-              // Removed description overwrite to preserve AI summaries
+              description: 'Video Proxy unavailable on Serverless.', 
               syncStatus: 'synced' 
           } : i));
           
           upsertItem({ 
               ...item, 
-              proxyS3Key: key, 
-              // Removed description overwrite to preserve AI summaries
+              description: 'Video Proxy unavailable on Serverless.', 
               syncStatus: 'synced' 
           });
           return;
@@ -1397,21 +1396,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
               // TRIGGER PROXY GENERATION AFTER UPLOAD SUCCESS
               if (fType === 'video') {
-                  // On serverless, we don't call generateVideoProxy, 
-                  // just mark as finished using the original file as proxy.
-                  setItems(prev => prev.map(i => i.id === id ? { 
-                      ...i, 
-                      proxyS3Key: key, 
-                      syncStatus: 'synced' 
-                  } : i));
-                  
-                  bulkUpdateMetadata([id], {
-                      s3Key: key, 
-                      proxyS3Key: key, 
-                      syncStatus: 'synced', 
-                      previewUrl: finalPreviewUrl,
-                      thumbnailUrl: finalThumbnailUrl
-                  });
+                  generateVideoProxy(id, key);
               }
           } catch (error: any) {
               console.error(`Upload failed for ${f.name}`, error);
