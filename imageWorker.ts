@@ -323,21 +323,9 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
         let finalBlob: Blob | null = null;
         const bestCandidate = candidates[0];
         
-        try {
-            // Trim the blob perfectly using OffscreenCanvas if available
-            if (typeof OffscreenCanvas !== 'undefined') {
-                const canvas = new OffscreenCanvas(bestCandidate.bitmap.width, bestCandidate.bitmap.height);
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    ctx.drawImage(bestCandidate.bitmap, 0, 0);
-                    finalBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
-                }
-            }
-        } catch (e) {
-            // Fallback
-        }
-        
-        if (!finalBlob) finalBlob = bestCandidate.blob;
+        // Removed OffscreenCanvas trimming. bestCandidate.blob is already a mathematically perfect JPEG from cleanJpeg().
+        // Using OffscreenCanvas here was causing silent Blob corruption and WebGL GPU crashes in Safari.
+        finalBlob = bestCandidate.blob;
         
         // Clean up memory
         for (const c of candidates) {
@@ -381,7 +369,7 @@ const resizeImage = async (blob: Blob, orientation: number = 1, maxSize: number 
 
         // 3. Draw to OffscreenCanvas
         const canvas = new OffscreenCanvas(outputWidth, outputHeight);
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         
         if (!ctx) {
             bitmap.close();

@@ -237,15 +237,34 @@ const ItemCell: React.FC<{ item: FileSystemItem, data: any }> = ({ item, data })
                     alt={item.name} 
                     className="w-full h-auto object-contain rounded-lg"
                     loading="lazy"
+                    onLoad={(e) => {
+                        const img = e.currentTarget;
+                        img.style.display = 'block';
+                        const parent = img.parentElement;
+                        if (parent) {
+                            parent.classList.remove('bg-gray-200','dark:bg-dark-800');
+                            const warning = parent.querySelector('.preview-error-warning');
+                            if (warning) {
+                                parent.removeChild(warning);
+                            }
+                        }
+                    }}
                     onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        const parent = e.currentTarget.parentElement;
+                        const img = e.currentTarget;
+                        if (img.dataset.failedSrc === img.src) return;
+                        img.dataset.failedSrc = img.src;
+                        
+                        img.style.display = 'none';
+                        const parent = img.parentElement;
                         if (parent) {
                             parent.classList.add('bg-gray-200','dark:bg-dark-800');
-                            const warning = document.createElement('div');
-                            warning.className = 'flex flex-col items-center gap-1 text-gray-400';
-                            warning.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xl"></i><span class="text-[8px] font-bold">PREVIEW ERROR</span>';
-                            parent.appendChild(warning);
+                            let warning = parent.querySelector('.preview-error-warning');
+                            if (!warning) {
+                                warning = document.createElement('div');
+                                warning.className = 'preview-error-warning flex flex-col items-center gap-1 text-gray-400';
+                                warning.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-xl"></i><span class="text-[8px] font-bold">PREVIEW ERROR</span>';
+                                parent.appendChild(warning);
+                            }
                         }
                     }}
                 /> :
