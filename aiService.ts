@@ -958,7 +958,7 @@ export const analyzeVideoMetadata = async (rawMetadata: string): Promise<{ make:
     try {
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
-            model: "gemini-3.5-flash",
+            model: "gemini-2.5-flash",
             contents: `Analyze the following raw video file metadata and extract the camera make and model, or the source application/device.
             
             CRITICAL INSTRUCTIONS:
@@ -1539,7 +1539,7 @@ IMPORTANT:
         // Dynamic Client Instantiation
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
-            model: 'gemini-3.5-flash', // Stable model for video
+            model: 'gemini-2.5-flash', // Stable model for video
             contents: contentParts,
             config: { 
                 responseMimeType: 'application/json',
@@ -1635,7 +1635,7 @@ Schema:
         // Dynamic Client Instantiation
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
-            model: 'gemini-3.5-flash', // Faster model for basic vision
+            model: 'gemini-2.5-flash', // Faster model for basic vision
             contents: parts,
             config: {
                 responseMimeType: 'application/json',
@@ -1693,7 +1693,7 @@ export const editImageWithAI = async (originalUrl: string, prompt: string): Prom
         const base64Data = await blobUrlToBase64(originalUrl);
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
-            model: 'gemini-3.5-flash', 
+            model: 'gemini-3.1-flash-image', 
             contents: [
                 { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
                 { text: `Edit this image: ${prompt}` }
@@ -1764,7 +1764,7 @@ export const proposeOrganization = async (files: FileManifest[], strategy: Organ
     try {
         const ai = getAI();
         const response = await callAIWithRetry(() => ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: 'gemini-2.5-flash',
             contents: prompt,
             config: { 
                 responseMimeType: 'application/json', 
@@ -1802,7 +1802,7 @@ export const copilotTools = [setFiltersTool, createFolderTool, listProjectsTool,
 export const initializeCopilotChat = (): Chat => {
     const ai = getAI();
     return ai.chats.create({
-        model: 'gemini-3.5-flash',
+        model: 'gemini-2.5-flash',
         config: {
             systemInstruction: `You are Sortana Copilot, an AI assistant embedded within a professional photo organization app called Sortana.
 Your primary goal is to help the user manage their workspace instantly by calling tools. 
@@ -1834,7 +1834,7 @@ IMPORTANT:
 - "tags": Generate a comprehensive array of 10-20 tags. These tags should aggressively identify potential objects, activities, concepts, context, setting, and colors based on the filename and metadata.`;
 
     const response = await callAIWithRetry(() => ai.models.generateContent({
-        model: 'gemini-3.5-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: { 
             responseMimeType: 'application/json',
