@@ -29,12 +29,24 @@ export class QuotaExceededError extends Error {
     }
 }
 
-const isValidImageBlob = async (blob: Blob): Promise<boolean> => {
-    try {
-        const bitmap = await createImageBitmap(blob);
-        bitmap.close();
-        return true;
-    } catch (e) { return false; }
+export const isValidImageBlob = async (blob: Blob, timeoutMs = 2000): Promise<boolean> => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        const timeoutId = setTimeout(() => {
+            img.src = '';
+            resolve(false);
+        }, timeoutMs);
+        
+        img.onload = () => {
+            clearTimeout(timeoutId);
+            resolve(true);
+        };
+        img.onerror = () => {
+            clearTimeout(timeoutId);
+            resolve(false);
+        };
+        img.src = URL.createObjectURL(blob);
+    });
 };
 
 // --- WORKER MANAGEMENT ---
@@ -578,7 +590,11 @@ const extractPreviewFromRaw = async (file) => {
                             if (marker === 0x00) { p += 2; continue; } // Byte stuffing
                             
                             if (marker === 0xD9) { chunks.push(originalBytes.slice(p, p + 2)); break; }
-                            if (marker === 0xDA) { chunks.push(originalBytes.slice(p, originalBytes.length)); break; }
+                            if (marker === 0xDA) {
+                                chunks.push(originalBytes.slice(p, originalBytes.length));
+                                chunks.push(new Uint8Array([0xFF, 0xD9])); // Force End of Image
+                                break;
+                            }
                             if (marker === 0xE1 || marker === 0xE2) {
                                 const len = (originalBytes[p + 2] << 8) | originalBytes[p + 3];
                                 p += 2 + len;
@@ -695,6 +711,7 @@ const extractPreviewFromRaw = async (file) => {
                                         }
                                         if (marker === 0xDA) {
                                             chunks.push(originalBytes.slice(p, originalBytes.length));
+                                            chunks.push(new Uint8Array([0xFF, 0xD9])); // Force End of Image
                                             break;
                                         }
                                         // SKIP APP1 and APP2 markers

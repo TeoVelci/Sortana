@@ -273,6 +273,7 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
                                                     }
                                                     if (marker === 0xDA) {
                                                         chunks.push(originalBytes.slice(p, originalBytes.length));
+                                                        chunks.push(new Uint8Array([0xFF, 0xD9])); // Force End of Image
                                                         break;
                                                     }
                                                     // SKIP APP1 and APP2 markers
