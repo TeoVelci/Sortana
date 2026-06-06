@@ -140,12 +140,23 @@ const MagicEditor: React.FC<MagicEditorProps> = ({ item, onClose, onSave }) => {
                 <div className="col-start-1 row-start-1 flex items-center justify-center">
                     {isVideo ? (
                         <div className="relative flex justify-center items-center h-full w-full bg-black">
-                            <video 
-                                src={directAwsUrl || undefined}
-                                controls
-                                className="max-w-full max-h-[calc(100dvh-280px)] object-contain bg-black"
-                                playsInline
-                            />
+                            {(!item.proxyS3Key && (item.make?.toLowerCase().includes('sony') || item.name.match(/\.(hevc|h265)$/i))) ? (
+                                <div className="flex flex-col items-center gap-4 p-8 text-center text-gray-500 bg-black">
+                                    <i className="fa-solid fa-video-slash text-6xl mb-4"></i>
+                                    <span className="text-xl font-bold text-white/80">UNSUPPORTED FORMAT</span>
+                                    <span className="text-sm max-w-md leading-relaxed text-white/60">
+                                        Your browser cannot safely hardware-decode this raw video format (HEVC/10-bit). 
+                                        Playing it may crash your GPU. Please download the file or use Safari.
+                                    </span>
+                                </div>
+                            ) : (
+                                <video 
+                                    src={directAwsUrl || undefined}
+                                    controls
+                                    className="max-w-full max-h-[calc(100dvh-280px)] object-contain bg-black"
+                                    playsInline
+                                />
+                            )}
                         </div>
                     ) : (
                         <img 
