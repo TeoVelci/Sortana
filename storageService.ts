@@ -146,42 +146,44 @@ export const multipartUploadFileToS3 = async (
   const CHUNK_SIZE = 15 * 1024 * 1024; // 15MB chunks to reduce edge function overhead
   const totalParts = Math.ceil(file.size / CHUNK_SIZE);
   
-  // 1. Create Multipart Upload
+  // 1. Create Multipart Upload & Sign All Parts
   const createData = await withRetry(async () => {
       const { data, error } = await supabase.functions.invoke('get-aws-presigned-url', {
-        body: { action: 'createMultipart', filename, filetype: file.type || 'application/octet-stream' }
+        body: { action: 'createMultipart', filename, filetype: file.type || 'application/octet-stream', totalParts }
       });
       if (error) throw error;
       return data;
   });
-  const { uploadId, key } = createData;
 
-  const uploadedParts: { ETag: string, PartNumber: number }[] = [];
-  
-  try {
-    // 2. Upload chunk function
+  const { uploadId, key, urls } = createData;
+
+  return new Promise<UploadResult>((resolve, reject) => {
+    const uploadedParts: { ETag: string, PartNumber: number }[] = [];
+    let activeUploads = 0;
+    const maxConcurrent = 5; // Increased to 5
+    let partsCompleted = 0;
+    const promises: Promise<any>[] = [];
+    let hasFailed = false;
+
+    // A helper to upload a single chunk
     const uploadChunk = async (partNumber: number, chunk: Blob) => {
       return withRetry(async () => {
-          // 2a. Get Presigned URL for Chunk
-          const { data: signData, error: signError } = await supabase.functions.invoke('get-aws-presigned-url', {
-            body: { action: 'signPart', uploadId, partNumber, key }
-          });
-          if (signError) throw signError;
-          
+          if (hasFailed) throw new Error("Upload already aborted");
+
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout to prevent browser connection queue aborts
+          const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
           
           let res;
           try {
-              res = await new Promise<Response>((resolve, reject) => {
+              res = await new Promise<Response>((resolveChunk, rejectChunk) => {
                   const xhr = new XMLHttpRequest();
-                  xhr.open('PUT', signData.url, true);
+                  // Use the pre-signed URL for this specific part (partNumber is 1-indexed)
+                  xhr.open('PUT', urls[partNumber - 1], true);
                   // Strip type to prevent fetch from sending unsigned Content-Type header
                   
                   xhr.onload = () => {
                       if (xhr.status >= 200 && xhr.status < 300) {
-                          // Mock fetch Response
-                          resolve({
+                          resolveChunk({
                               ok: true,
                               status: xhr.status,
                               headers: {
@@ -189,18 +191,16 @@ export const multipartUploadFileToS3 = async (
                               }
                           } as any);
                       } else {
-                          resolve({ ok: false, status: xhr.status } as any);
+                          resolveChunk({ ok: false, status: xhr.status } as any);
                       }
                   };
-                  xhr.onerror = () => reject(new Error('Network error'));
-                  xhr.onabort = () => reject(new Error('Aborted'));
+                  xhr.onerror = () => rejectChunk(new Error('Network error'));
+                  xhr.onabort = () => rejectChunk(new Error('Aborted'));
                   
                   // Track chunk progress
                   if (onProgress) {
                       xhr.upload.onprogress = (e) => {
-                          if (e.lengthComputable) {
-                              // We only track overall parts completed, but if we wanted granular chunk progress we could do it here
-                          }
+                          // Granular tracking could go here
                       };
                   }
                   
@@ -221,61 +221,61 @@ export const multipartUploadFileToS3 = async (
       });
     };
 
-    // We can use a simple concurrency limiter
-    let activeUploads = 0;
-    const maxConcurrent = 5; // Increased to 5
-    let partsCompleted = 0;
-    const promises: Promise<any>[] = [];
-    let hasFailed = false;
+    const runAllChunks = async () => {
+        try {
+            for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+              if (hasFailed) break;
+              
+              while (activeUploads >= maxConcurrent) {
+                if (hasFailed) break;
+                await new Promise(r => setTimeout(r, 100)); // wait
+              }
+              
+              if (hasFailed) break;
+              
+              const start = (partNumber - 1) * CHUNK_SIZE;
+              const end = Math.min(start + CHUNK_SIZE, file.size);
+              const chunk = file.slice(start, end);
+              
+              activeUploads++;
+              const promise = uploadChunk(partNumber, chunk).then((res) => {
+                if (res) uploadedParts.push(res);
+                activeUploads--;
+                partsCompleted++;
+                if (onProgress) onProgress(Math.round((partsCompleted / totalParts) * 100));
+              }).catch(err => {
+                  hasFailed = true;
+                  throw err;
+              });
+              
+              promises.push(promise);
+            }
 
-    for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
-      if (hasFailed) break;
-      
-      while (activeUploads >= maxConcurrent) {
-        if (hasFailed) break;
-        await new Promise(resolve => setTimeout(resolve, 100)); // wait
-      }
-      
-      if (hasFailed) break;
-      
-      const start = (partNumber - 1) * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      const chunk = file.slice(start, end);
-      
-      activeUploads++;
-      const promise = uploadChunk(partNumber, chunk).then((res) => {
-        if (res) uploadedParts.push(res);
-        activeUploads--;
-        partsCompleted++;
-        if (onProgress) onProgress(Math.round((partsCompleted / totalParts) * 100));
-      }).catch(err => {
-        activeUploads--;
-        hasFailed = true;
-        throw err;
-      });
-      promises.push(promise);
-    }
-    
-    await Promise.all(promises);
-    
-    uploadedParts.sort((a, b) => a.PartNumber - b.PartNumber);
+            await Promise.all(promises);
 
-    // 3. Complete Multipart
-    await withRetry(async () => {
-        const { error: completeError } = await supabase.functions.invoke('get-aws-presigned-url', {
-          body: { action: 'completeMultipart', uploadId, key, parts: uploadedParts }
-        });
-        if (completeError) throw completeError;
-    });
+            if (hasFailed) throw new Error("Upload was aborted");
 
-    return { url: '', key };
+            // 3. Complete Multipart Upload
+            const completeData = await withRetry(async () => {
+                const sortedParts = [...uploadedParts].sort((a, b) => a.PartNumber - b.PartNumber);
+                const { data, error } = await supabase.functions.invoke('get-aws-presigned-url', {
+                  body: { action: 'completeMultipart', uploadId, key, parts: sortedParts }
+                });
+                if (error) throw error;
+                return data;
+            });
+            
+            resolve({ url: '', key: completeData.key });
+        } catch (error) {
+            hasFailed = true;
+            // 4. Abort Multipart Upload
+            supabase.functions.invoke('get-aws-presigned-url', {
+              body: { action: 'abortMultipart', uploadId, key }
+            }).catch(e => console.error("Abort failed", e));
+            reject(error);
+        }
+    };
 
-  } catch (err) {
-    // 4. Abort on fatal error
-    await supabase.functions.invoke('get-aws-presigned-url', {
-      body: { action: 'abortMultipart', uploadId, key }
-    }).catch(console.error); 
-    
-    throw err;
-  }
+    runAllChunks();
+  });
 };
