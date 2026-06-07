@@ -52,10 +52,17 @@ export const getPresignedUrl = async (filename: string, filetype: string): Promi
  */
 export const uploadFileToS3 = async (file: File | Blob, presignedUrl: string, onProgress?: (percent: number) => void) => {
     return withRetry(async () => {
-        // Fetch is significantly faster and more memory efficient for large blobs than XHR
+        // Prevent Safari/Chrome zero-byte fetch bug: OffscreenCanvas Blobs can silently upload as 0 bytes 
+        // if they're read asynchronously while also being used elsewhere (like URL.createObjectURL).
+        // For previews/thumbnails (<20MB), converting to ArrayBuffer guarantees a flawless upload.
+        let bodyToUpload: BodyInit = file;
+        if (file instanceof Blob && file.size < 20 * 1024 * 1024 && !('name' in file)) {
+            bodyToUpload = await file.arrayBuffer();
+        }
+
         const res = await fetch(presignedUrl, {
             method: 'PUT',
-            body: file,
+            body: bodyToUpload,
             headers: {
                 'Content-Type': (file as File).type || 'application/octet-stream'
             }
@@ -166,9 +173,14 @@ export const multipartUploadFileToS3 = async (
           
           let res;
           try {
+              // Convert to ArrayBuffer to strip Blob type.
+              // If fetch is passed a Blob, it automatically appends Content-Type headers,
+              // which breaks the S3 UploadPart signature since it was signed without headers.
+              const buffer = await chunk.arrayBuffer();
+              
               res = await fetch(urls[partNumber - 1], {
                   method: 'PUT',
-                  body: chunk, // fetch natively handles Blob streaming very efficiently
+                  body: buffer,
                   signal: controller.signal
               });
           } finally {
