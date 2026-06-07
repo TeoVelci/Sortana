@@ -1378,7 +1378,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
               // UPLOAD MAIN FILE
               let key: string;
-              if (f.size > 5 * 1024 * 1024) {
+              if (f.size > 50 * 1024 * 1024) {
                   const result = await multipartUploadFileToS3(f, f.name, (pct) => {
                       fileProgressMap.set(f.name, (pct / 100) * f.size);
                       updateOverallProgress();

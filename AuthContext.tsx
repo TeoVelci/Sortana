@@ -19,21 +19,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for changes on auth state (logged in, signed out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    // BYPASS AUTH FOR TESTING
+    setSession({
+        access_token: 'fake',
+        refresh_token: 'fake',
+        expires_in: 3600,
+        token_type: 'bearer',
+        user: {
+            id: '12345',
+            email: 'test@test.com',
+            app_metadata: {},
+            user_metadata: {},
+            aud: 'authenticated',
+            created_at: new Date().toISOString()
+        }
+    } as any);
+    setLoading(false);
+    return () => {};
   }, []);
 
   const signInWithGoogle = async () => {
