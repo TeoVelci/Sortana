@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import AutoOrganizeModal from './AutoOrganizeModal';
 
 const Dashboard: React.FC = () => {
-  const { uploadFiles, storage, recentActivity, getStoragePercentage, formatSize, user, isVideoMetadataQueueActive, uploadProgress } = useApp();
+  const { uploadFiles, storage, recentActivity, getStoragePercentage, formatSize, user, isVideoMetadataQueueActive, uploadProgress, syncQueue } = useApp();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -93,7 +93,7 @@ const Dashboard: React.FC = () => {
         setProgress(100);
         setFilesToUpload([]);
         setProjectTag('');
-        showToast(useSmartSort ? 'Files uploaded & smartly organized!' : 'Files uploaded successfully!', 'success');
+        showToast(useSmartSort ? 'Smart upload initiated! Originals syncing in background.' : 'Upload initiated! Originals syncing in background.', 'success');
         
         // Auto-reset back to idle after a few seconds so the user can upload again cleanly
         setTimeout(() => {
@@ -237,18 +237,20 @@ const Dashboard: React.FC = () => {
           <div className="bg-white dark:bg-surface-dark border border-gray-200 dark:border-white/10 rounded-xl shadow-sm p-8 h-48">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Active Tasks</h3>
             
-            {uploadStatus === 'idle' && (
+            {uploadStatus === 'idle' && syncQueue.length === 0 && (
               <div className="text-gray-500 text-sm text-center py-4">No active uploads.</div>
             )}
 
-            {uploadStatus !== 'idle' && (
+            {(uploadStatus !== 'idle' || syncQueue.length > 0) && (
               <div className="space-y-6">
                 <div>
                   <div className="flex justify-between text-sm mb-2 items-center">
                     <div className="flex gap-1">
                       <span className="text-gray-900 dark:text-white font-bold">Status:</span> 
                       <span className="text-gray-500 dark:text-gray-400">
-                        {uploadStatus === 'complete' ? 'Done' : (isWaitingForAI ? 'Analyzing AI...' : 'Uploading...')}
+                        {uploadStatus === 'complete' && syncQueue.length > 0 ? `Syncing ${syncQueue.length} files in background...` :
+                         uploadStatus === 'complete' ? 'Done' : 
+                         (isWaitingForAI ? 'Analyzing AI...' : 'Uploading...')}
                       </span>
                     </div>
                     <span className="text-gray-500 text-xs">{progress}%</span>

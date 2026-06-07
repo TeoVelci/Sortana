@@ -1378,7 +1378,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
               // UPLOAD MAIN FILE
               let key: string;
-              if (f.size > 50 * 1024 * 1024) {
+              if (f.size > 5 * 1024 * 1024) {
                   const result = await multipartUploadFileToS3(f, f.name, (pct) => {
                       fileProgressMap.set(f.name, (pct / 100) * f.size);
                       updateOverallProgress();
@@ -1439,12 +1439,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
         }
         await Promise.all(running);
+        if (onProgress) onProgress(100);
+        setUploadProgress(0);
     };
 
-    await runUploads();
-
-    if (onProgress) onProgress(100);
-    setUploadProgress(0);
+    // Run in background! Don't await.
+    runUploads().catch(err => {
+        console.error("Background upload failed", err);
+        setUploadProgress(0);
+    });
 
     // 2. AUTO-STACKING (Burst Detection)
     newItems.sort((a, b) => (a.dateTaken || 0) - (b.dateTaken || 0));
