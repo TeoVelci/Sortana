@@ -1179,8 +1179,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       let isFallbackDate = true;
 
       try {
+          // Helper to enforce hard timeout on processFileForDisplay to prevent indefinite hanging
+          const safeProcessFile = async (f: File, size: number) => {
+              try {
+                  const result = await Promise.race([
+                      processFileForDisplay(f, size),
+                      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('processFileForDisplay timeout')), 15000))
+                  ]);
+                  return result;
+              } catch (err) {
+                  console.warn(`Timeout or error processing ${f.name} at ${size}px:`, err);
+                  return null;
+              }
+          };
+
           // Generate high-res preview (2560px)
-          const processed = await processFileForDisplay(f, 2560);
+          const processed = await safeProcessFile(f, 2560);
           const isRaw = f.type.includes('raw') || f.name.toLowerCase().match(/\.(arw|cr2|cr3|nef|dng|orf|rw2|raf|gpr)$/i);
           const isVideoFile = f.type.startsWith('video/') || f.name.match(/\.(mp4|mov|m4v)$/i);
           
@@ -1191,7 +1205,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               shouldAnalyze = !isVideoFile; // Only JPEGs/RAWs go to image AI
               
               // Generate small thumbnail (1024px) for grid performance
-              const thumb = await processFileForDisplay(f, 1024);
+              const thumb = await safeProcessFile(f, 1024);
               if (thumb) {
                   thumbnailBlob = thumb;
                   thumbnailUrl = URL.createObjectURL(thumb);
@@ -1204,7 +1218,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               shouldAnalyze = false; // Videos are handled by VideoMetadataQueue, not the image AI
           }
 
-          const meta = await extractDetailedMetadata(f);
+          const safeExtractMetadata = async (f: File) => {
+              try {
+                  const result = await Promise.race([
+                      extractDetailedMetadata(f),
+                      new Promise<any>((_, reject) => setTimeout(() => reject(new Error('extractDetailedMetadata timeout')), 5000))
+                  ]);
+                  return result;
+              } catch (err) {
+                  console.warn(`Timeout or error extracting metadata for ${f.name}:`, err);
+                  return { make: null, model: null, dateTaken: new Date(f.lastModified), orientation: 1, rawMetadata: '' };
+              }
+          };
+
+          const meta = await safeExtractMetadata(f);
           if (meta.dateTaken) {
               dateTaken = meta.dateTaken.getTime();
               isFallbackDate = dateTaken === f.lastModified;
