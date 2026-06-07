@@ -143,7 +143,7 @@ export const multipartUploadFileToS3 = async (
   filename: string,
   onProgress?: (percent: number) => void
 ): Promise<UploadResult> => {
-  const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+  const CHUNK_SIZE = 15 * 1024 * 1024; // 15MB chunks to reduce edge function overhead
   const totalParts = Math.ceil(file.size / CHUNK_SIZE);
   
   // 1. Create Multipart Upload
@@ -173,10 +173,41 @@ export const multipartUploadFileToS3 = async (
           
           let res;
           try {
-              res = await fetch(signData.url, {
-                method: 'PUT',
-                body: new Blob([chunk]), // Strip type to prevent fetch from sending unsigned Content-Type header
-                signal: controller.signal
+              res = await new Promise<Response>((resolve, reject) => {
+                  const xhr = new XMLHttpRequest();
+                  xhr.open('PUT', signData.url, true);
+                  // Strip type to prevent fetch from sending unsigned Content-Type header
+                  
+                  xhr.onload = () => {
+                      if (xhr.status >= 200 && xhr.status < 300) {
+                          // Mock fetch Response
+                          resolve({
+                              ok: true,
+                              status: xhr.status,
+                              headers: {
+                                  get: (name: string) => xhr.getResponseHeader(name)
+                              }
+                          } as any);
+                      } else {
+                          resolve({ ok: false, status: xhr.status } as any);
+                      }
+                  };
+                  xhr.onerror = () => reject(new Error('Network error'));
+                  xhr.onabort = () => reject(new Error('Aborted'));
+                  
+                  // Track chunk progress
+                  if (onProgress) {
+                      xhr.upload.onprogress = (e) => {
+                          if (e.lengthComputable) {
+                              // We only track overall parts completed, but if we wanted granular chunk progress we could do it here
+                          }
+                      };
+                  }
+                  
+                  xhr.send(chunk);
+                  
+                  // Abort controller integration
+                  controller.signal.addEventListener('abort', () => xhr.abort());
               });
           } finally {
               clearTimeout(timeoutId);
@@ -192,7 +223,7 @@ export const multipartUploadFileToS3 = async (
 
     // We can use a simple concurrency limiter
     let activeUploads = 0;
-    const maxConcurrent = 3;
+    const maxConcurrent = 5; // Increased to 5
     let partsCompleted = 0;
     const promises: Promise<any>[] = [];
     let hasFailed = false;
