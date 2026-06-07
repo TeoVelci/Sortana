@@ -279,7 +279,9 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
                                         const cleanBlob = cleanJpeg(rawSlice);
                                         
                                         try {
-                                            const bitmap = await createImageBitmap(cleanBlob);
+                                            const bitmapPromise = createImageBitmap(cleanBlob);
+                                            const timeoutPromise = new Promise<ImageBitmap>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000));
+                                            const bitmap = await Promise.race([bitmapPromise, timeoutPromise]);
                                             candidates.push({ area: bitmap.width * bitmap.height, bitmap, blob: cleanBlob });
                                             foundEnd = possibleEnd;
                                             break; // IMPORTANT: Stop searching for FF D9 from this FF D8!

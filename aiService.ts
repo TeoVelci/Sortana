@@ -608,7 +608,12 @@ const extractPreviewFromRaw = async (file) => {
                     return new Blob(chunks, { type: 'image/jpeg' });
                 };
                 
-                return cleanJpeg(searchBytes);
+                const cleanBlob = cleanJpeg(searchBytes);
+                if (await isValidImageBlob(cleanBlob, 2000)) {
+                    return cleanBlob;
+                } else {
+                    console.warn("EXIF slice is invalid or froze Chrome. Falling back to byte-scanning.");
+                }
             }
         } catch (e) { }
 
@@ -1249,7 +1254,9 @@ export const extractDetailedMetadata = async (file: File): Promise<ImageMetadata
 const resizeImageMainThread = async (blob: Blob, orientation: number, maxSize: number): Promise<Blob> => {
     return new Promise(async (resolve, reject) => {
         try {
-            const bitmap = await createImageBitmap(blob);
+            const bitmapPromise = createImageBitmap(blob);
+            const timeoutPromise = new Promise<ImageBitmap>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000));
+            const bitmap = await Promise.race([bitmapPromise, timeoutPromise]);
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             if (!ctx) {
