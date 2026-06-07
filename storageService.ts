@@ -52,34 +52,25 @@ export const getPresignedUrl = async (filename: string, filetype: string): Promi
  */
 export const uploadFileToS3 = async (file: File | Blob, presignedUrl: string, onProgress?: (percent: number) => void) => {
     return withRetry(async () => {
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('PUT', presignedUrl, true);
-            
-            xhr.setRequestHeader('Content-Type', (file as File).type || 'application/octet-stream');
-            
-            if (onProgress) {
-                xhr.upload.onprogress = (e) => {
-                    if (e.lengthComputable) {
-                        onProgress(Math.round((e.loaded / e.total) * 100));
-                    }
-                };
+        // Fetch is significantly faster and more memory efficient for large blobs than XHR
+        const res = await fetch(presignedUrl, {
+            method: 'PUT',
+            body: file,
+            headers: {
+                'Content-Type': (file as File).type || 'application/octet-stream'
             }
-            
-            xhr.onload = () => {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    resolve(true);
-                } else {
-                    reject(new Error(`Upload failed with status: ${xhr.status}`));
-                }
-            };
-            
-            xhr.onerror = () => {
-                reject(new Error('Upload failed due to network error'));
-            };
-            
-            xhr.send(file);
         });
+        
+        if (!res.ok) {
+            throw new Error(`Upload failed with status: ${res.status}`);
+        }
+        
+        // Emulate instant progress complete since we can't track fetch upload streams easily
+        if (onProgress) {
+            onProgress(100);
+        }
+        
+        return true;
     });
 };
 
@@ -175,39 +166,10 @@ export const multipartUploadFileToS3 = async (
           
           let res;
           try {
-              res = await new Promise<Response>((resolveChunk, rejectChunk) => {
-                  const xhr = new XMLHttpRequest();
-                  // Use the pre-signed URL for this specific part (partNumber is 1-indexed)
-                  xhr.open('PUT', urls[partNumber - 1], true);
-                  // Strip type to prevent fetch from sending unsigned Content-Type header
-                  
-                  xhr.onload = () => {
-                      if (xhr.status >= 200 && xhr.status < 300) {
-                          resolveChunk({
-                              ok: true,
-                              status: xhr.status,
-                              headers: {
-                                  get: (name: string) => xhr.getResponseHeader(name)
-                              }
-                          } as any);
-                      } else {
-                          resolveChunk({ ok: false, status: xhr.status } as any);
-                      }
-                  };
-                  xhr.onerror = () => rejectChunk(new Error('Network error'));
-                  xhr.onabort = () => rejectChunk(new Error('Aborted'));
-                  
-                  // Track chunk progress
-                  if (onProgress) {
-                      xhr.upload.onprogress = (e) => {
-                          // Granular tracking could go here
-                      };
-                  }
-                  
-                  xhr.send(chunk);
-                  
-                  // Abort controller integration
-                  controller.signal.addEventListener('abort', () => xhr.abort());
+              res = await fetch(urls[partNumber - 1], {
+                  method: 'PUT',
+                  body: chunk, // fetch natively handles Blob streaming very efficiently
+                  signal: controller.signal
               });
           } finally {
               clearTimeout(timeoutId);
