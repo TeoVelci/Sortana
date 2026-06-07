@@ -575,7 +575,7 @@ const extractPreviewFromRaw = async (file) => {
                 const searchBuffer = await previewSlice.arrayBuffer();
                 const searchBytes = new Uint8Array(searchBuffer);
                 
-                const cleanJpeg = (originalBytes: Uint8Array): Blob => {
+                const cleanJpeg = (originalBytes) => {
                     const chunks = [];
                     let p = 2;
                     chunks.push(originalBytes.slice(0, 2)); // FF D8
@@ -688,7 +688,7 @@ const extractPreviewFromRaw = async (file) => {
                         if (end > 2000) { // Minimum size for a valid preview
                             // Clean the JPEG to remove EXIF/MakerNote thumbnails so createImageBitmap reads the true image
                             // We also MUST inject a standard APP0 JFIF marker, otherwise Chrome's strict Skia decoder rejects it completely!
-                            const cleanJpeg = (originalBytes: Uint8Array): Blob => {
+                            const cleanJpeg = (originalBytes) => {
                                 const chunks = [];
                                 let p = 2;
                                 chunks.push(originalBytes.slice(0, 2)); // FF D8
@@ -836,33 +836,45 @@ self.onerror = (e) => {
 // Initialize Worker from Blob
 const workerBlob = new Blob([WORKER_SCRIPT], { type: "application/javascript" });
 const workerUrl = URL.createObjectURL(workerBlob);
-const worker = new Worker(workerUrl);
 
 interface WorkerTask {
     resolve: (value: any) => void;
     reject: (reason?: any) => void;
 }
 
-const workerCallbacks = new Map<string, WorkerTask>();
+let worker: Worker;
+let workerCallbacks = new Map<string, WorkerTask>();
 
-worker.onerror = (e) => {
-    console.error("Worker crashed globally:", e);
-    // Reject all pending tasks to prevent infinite hanging
-    for (const [id, task] of workerCallbacks.entries()) {
-        task.reject(new Error("Worker crashed: " + (e.message || "Unknown error")));
+const initWorker = () => {
+    if (worker) {
+        worker.terminate();
     }
-    workerCallbacks.clear();
+    worker = new Worker(workerUrl);
+    
+    worker.onerror = (e) => {
+        console.error("Worker crashed globally:", e);
+        // Reject all pending tasks to prevent infinite hanging
+        for (const [id, task] of workerCallbacks.entries()) {
+            task.reject(new Error("Worker crashed: " + (e.message || "Unknown error")));
+        }
+        workerCallbacks.clear();
+        // Recreate the worker so future tasks don't hang on a dead worker!
+        initWorker();
+    };
+
+    worker.onmessage = (e) => {
+        const { id, success, result, error } = e.data;
+        const task = workerCallbacks.get(id);
+        if (task) {
+            if (success) task.resolve(result);
+            else task.reject(new Error(error));
+            workerCallbacks.delete(id);
+        }
+    };
 };
 
-worker.onmessage = (e) => {
-    const { id, success, result, error } = e.data;
-    const task = workerCallbacks.get(id);
-    if (task) {
-        if (success) task.resolve(result);
-        else task.reject(new Error(error));
-        workerCallbacks.delete(id);
-    }
-};
+// Start the initial worker
+initWorker();
 
 const runWorkerTask = (type: string, payload: any): Promise<any> => {
     return new Promise((resolve, reject) => {

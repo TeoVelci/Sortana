@@ -50,27 +50,36 @@ export const getPresignedUrl = async (filename: string, filetype: string): Promi
 /**
  * Uploads a file directly to AWS S3 using the presigned URL.
  */
-export const uploadFileToS3 = async (file: File | Blob, presignedUrl: string) => {
+export const uploadFileToS3 = async (file: File | Blob, presignedUrl: string, onProgress?: (percent: number) => void) => {
     return withRetry(async () => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
-
-        let res;
-        try {
-            res = await fetch(presignedUrl, {
-              method: 'PUT',
-              headers: { 'Content-Type': (file as File).type || 'application/octet-stream' },
-              body: file,
-              signal: controller.signal
-            });
-        } finally {
-            clearTimeout(timeoutId);
-        }
-
-        if (!res.ok) {
-          throw new Error(`Upload failed with status: ${res.status}`);
-        }
-        return true;
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', presignedUrl, true);
+            
+            xhr.setRequestHeader('Content-Type', (file as File).type || 'application/octet-stream');
+            
+            if (onProgress) {
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        onProgress(Math.round((e.loaded / e.total) * 100));
+                    }
+                };
+            }
+            
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(true);
+                } else {
+                    reject(new Error(`Upload failed with status: ${xhr.status}`));
+                }
+            };
+            
+            xhr.onerror = () => {
+                reject(new Error('Upload failed due to network error'));
+            };
+            
+            xhr.send(file);
+        });
     });
 };
 

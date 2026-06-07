@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import AutoOrganizeModal from './AutoOrganizeModal';
 
 const Dashboard: React.FC = () => {
-  const { uploadFiles, storage, recentActivity, getStoragePercentage, formatSize, user, isVideoMetadataQueueActive } = useApp();
+  const { uploadFiles, storage, recentActivity, getStoragePercentage, formatSize, user, isVideoMetadataQueueActive, uploadProgress } = useApp();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -66,35 +66,31 @@ const Dashboard: React.FC = () => {
 
     setUploadStatus('uploading');
     setIsWaitingForAI(false);
+    setProgress(0);
     
-    // Simulate Upload Progress
-    let p = 0;
-    const interval = setInterval(() => {
-      p += 10;
-      if (p >= 100) {
-        clearInterval(interval);
-      }
-      setProgress(p);
-    }, 200);
-
-    // Wait for simulation, then attempt upload
-    setTimeout(async () => {
-      try {
-          await uploadFiles(filesToUpload, projectTag, useSmartSort);
-          // Instead of instantly completing, wait for AI queue if active
-          setIsWaitingForAI(true);
-      } catch (error: any) {
-          setUploadStatus('idle'); // Reset status on failure
-          setIsWaitingForAI(false);
-          showToast(error.message || "Upload failed. Storage limit reached?", 'error');
-      }
-    }, 2000);
+    try {
+        await uploadFiles(filesToUpload, projectTag, useSmartSort);
+        // Instead of instantly completing, wait for AI queue if active
+        setIsWaitingForAI(true);
+    } catch (error: any) {
+        setUploadStatus('idle'); // Reset status on failure
+        setIsWaitingForAI(false);
+        isUploadingRef.current = false;
+        showToast(error.message || "Upload failed. Storage limit reached?", 'error');
+    }
   };
+
+  useEffect(() => {
+      if (uploadStatus === 'uploading') {
+          setProgress(uploadProgress);
+      }
+  }, [uploadProgress, uploadStatus]);
 
   useEffect(() => {
     if (isWaitingForAI && !isVideoMetadataQueueActive) {
         setIsWaitingForAI(false);
         setUploadStatus('complete');
+        setProgress(100);
         setFilesToUpload([]);
         setProjectTag('');
         showToast(useSmartSort ? 'Files uploaded & smartly organized!' : 'Files uploaded successfully!', 'success');
@@ -103,6 +99,7 @@ const Dashboard: React.FC = () => {
         setTimeout(() => {
             setUploadStatus(prev => prev === 'complete' ? 'idle' : prev);
             setProgress(0);
+            isUploadingRef.current = false;
         }, 3000);
     }
   }, [isWaitingForAI, isVideoMetadataQueueActive, useSmartSort]);

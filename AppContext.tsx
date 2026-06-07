@@ -351,6 +351,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isProcessingVideoQueue, setIsProcessingVideoQueue] = useState(false);
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
   const [queuePausedUntil, setQueuePausedUntil] = useState<number>(0);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   // Computed Queue Status
   const queueStatus = queuePausedUntil > Date.now() ? 'paused' : (isProcessingQueue || analysisQueue.length > 0) ? 'processing' : 'idle';
@@ -989,33 +990,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               syncStatus: 'synced' 
           });
           return;
-
-      /* RESTORE THIS IF YOU DEPLOY TO A SERVER WITH FFMPEG
-          const response = await fetch('/api/generate-proxy', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key }),
-              signal: controller.signal
-          });
-          
-          clearTimeout(timeoutId);
-
-          if (!response.ok) {
-              throw new Error(`Proxy generation failed with status ${response.status}`);
-          }
-
-          const data = await response.json();
-          if (data.proxyKey) {
-              setItems(prev => prev.map(i => {
-                  if (i.id === id) {
-                      const updated = { ...i, proxyS3Key: data.proxyKey, description: i.description?.replace('Generating proxy...', '') || '' };
-                      upsertItem(updated);
-                      return updated;
-                  }
-                  return i;
-              }));
-          }
-          */
       } catch (e: any) {
           console.error("Proxy generation failed", e);
           const errorMsg = e.name === 'AbortError' ? 'Proxy timed out.' : 'Proxy failed.';
@@ -1067,7 +1041,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const uploadFiles = async (files: File[], projectTag: string, useSmartSort: boolean = true) => {
+  const uploadFiles = async (files: File[], projectTag: string, useSmartSort: boolean = true, onProgress?: (percent: number) => void) => {
     // 0. STRICT QUOTA CHECK
     const totalUploadSize = files.reduce((acc, f) => acc + f.size, 0);
     const currentLimit = PLAN_LIMITS[user.plan] || PLAN_LIMITS['Free'];
@@ -1148,6 +1122,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     const uploadTasks: (() => Promise<void>)[] = [];
+
+    const totalSize = uniqueFiles.reduce((acc, f) => acc + f.size, 0);
+    const fileProgressMap = new Map<string, number>();
+
+    const updateOverallProgress = () => {
+        let totalUploaded = 0;
+        for (const loaded of fileProgressMap.values()) {
+            totalUploaded += loaded;
+        }
+        const pct = Math.min(99, Math.round((totalUploaded / totalSize) * 100));
+        setUploadProgress(pct);
+        if (onProgress) onProgress(pct);
+    };
 
     for (const f of uniqueFiles) {
       if (f.name.toLowerCase().endsWith('.xml')) continue; // Skip XML files as items, they are sidecars
@@ -1355,10 +1342,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           videoAnalysisTasksToQueue.push({ id, fileInfo: { name: f.name, type: fType === 'video' ? 'video/mp4' : f.type }, rawMetadata: rawMetadata || "" });
       }
 
-      if (fType === 'video') {
-          // generateVideoProxy(id); // REMOVED: Call it after upload instead
-      }
-
       // Define the upload task for this file
       uploadTasks.push(async () => {
           try {
@@ -1395,13 +1378,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
               // UPLOAD MAIN FILE
               let key: string;
-              if (f.size > 15 * 1024 * 1024) {
-                  const result = await multipartUploadFileToS3(f, f.name);
+              if (f.size > 5 * 1024 * 1024) {
+                  const result = await multipartUploadFileToS3(f, f.name, (pct) => {
+                      fileProgressMap.set(f.name, (pct / 100) * f.size);
+                      updateOverallProgress();
+                  });
                   key = result.key;
               } else {
-                  const presign = await getPresignedUrl(f.name, f.type);
+                  const presign = await getPresignedUrl(f.name, f.type || 'application/octet-stream');
                   key = presign.key;
-                  await uploadFileToS3(f, presign.url);
+                  await uploadFileToS3(f, presign.url, (pct) => {
+                      fileProgressMap.set(f.name, (pct / 100) * f.size);
+                      updateOverallProgress();
+                  });
               }
 
               const finalS3Url = getPublicUrl(key);
@@ -1437,7 +1426,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
     }
 
-    // Execute uploads with concurrency limit
     const runUploads = async () => {
         const limit = 3;
         const running: Promise<any>[] = [];
@@ -1453,7 +1441,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await Promise.all(running);
     };
 
-    runUploads();
+    await runUploads();
+
+    if (onProgress) onProgress(100);
+    setUploadProgress(0);
 
     // 2. AUTO-STACKING (Burst Detection)
     newItems.sort((a, b) => (a.dateTaken || 0) - (b.dateTaken || 0));
@@ -1942,7 +1933,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       retryUpload,
       queueStatus,
       syncQueue,
-      isVideoMetadataQueueActive: videoMetadataQueue.length > 0 || isProcessingVideoQueue
+      analysisQueue,
+      videoMetadataQueue,
+      isProcessingVideoQueue,
+      isVideoMetadataQueueActive: videoMetadataQueue.length > 0 || isProcessingVideoQueue,
+      uploadProgress
     }}>
       {children}
     </AppContext.Provider>
