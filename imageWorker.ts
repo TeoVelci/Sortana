@@ -243,41 +243,26 @@ const extractPreviewFromRaw = async (file: File | Blob) => {
                                 } else if (marker === 0xD9) { // End of Image
                                     const possibleEnd = sOffset + 2;
                                     if (possibleEnd > 2000) {
-                                        // Clean the JPEG to remove EXIF/MakerNote thumbnails so createImageBitmap reads the true image
-                                        // We also MUST inject a standard APP0 JFIF marker, otherwise Chrome's strict Skia decoder rejects it completely!
                                         const cleanJpeg = (originalBytes: Uint8Array): Blob => {
                                             const chunks = [];
                                             let p = 2;
                                             chunks.push(originalBytes.slice(0, 2)); // FF D8
-
-                                            // Inject standard APP0 JFIF marker (18 bytes total)
                                             chunks.push(new Uint8Array([
-                                                0xFF, 0xE0, // APP0 marker
-                                                0x00, 0x10, // Length (16 bytes)
-                                                0x4A, 0x46, 0x49, 0x46, 0x00, // "JFIF\0" identifier
-                                                0x01, 0x01, // Version 1.1
-                                                0x00, // Units (0 = no units)
-                                                0x00, 0x01, 0x00, 0x01, // X/Y density (1,1)
-                                                0x00, 0x00 // Thumbnail 0x0
+                                                0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00,
+                                                0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00
                                             ]));
-
                                             while (p < originalBytes.length - 1) {
                                                 if (originalBytes[p] === 0xFF) {
-                                                    const marker = originalBytes[p + 1];
-                                                    if (marker === 0xFF) { p++; continue; } // Padding
-                                                    if (marker === 0x00) { p += 2; continue; } // Byte stuffing
-                                                    
-                                                    if (marker === 0xD9) {
-                                                        chunks.push(originalBytes.slice(p, p + 2));
-                                                        break;
-                                                    }
-                                                    if (marker === 0xDA) {
+                                                    const m = originalBytes[p + 1];
+                                                    if (m === 0xFF) { p++; continue; }
+                                                    if (m === 0x00) { p += 2; continue; }
+                                                    if (m === 0xD9) { chunks.push(originalBytes.slice(p, p + 2)); break; }
+                                                    if (m === 0xDA) {
                                                         chunks.push(originalBytes.slice(p, originalBytes.length));
                                                         chunks.push(new Uint8Array([0xFF, 0xD9])); // Force End of Image
                                                         break;
                                                     }
-                                                    // SKIP APP1 and APP2 markers
-                                                    if (marker === 0xE1 || marker === 0xE2) {
+                                                    if (m === 0xE1 || m === 0xE2) {
                                                         const len = (originalBytes[p + 2] << 8) | originalBytes[p + 3];
                                                         p += 2 + len;
                                                         continue;
